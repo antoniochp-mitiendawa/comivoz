@@ -73,24 +73,22 @@ actualizar_estado() {
 # =============================================
 # INICIO DE LA INSTALACIÓN
 # =============================================
-if [ "$PASO_ACTUAL" -lt 1 ]; then
-    clear
-    mensaje_titulo "COMIDABOT - INSTALACIÓN EN TERMUX"
-    echo ""
-    echo -e "${BLANCO}Este instalador configurará todo lo necesario para:${NC}"
-    echo -e "  ${VERDE}•${NC} WhatsApp Bot con Baileys"
-    echo -e "  ${VERDE}•${NC} Whisper.cpp para reconocimiento de voz"
-    echo -e "  ${VERDE}•${NC} Base de datos SQLite"
-    echo -e "  ${VERDE}•${NC} Sistema de menús diarios"
-    echo -e "  ${VERDE}•${NC} Respuestas automáticas con spintax"
-    echo ""
-    echo -e "${AMARILLO}⚠️  IMPORTANTE:${NC}"
-    echo -e "  • Asegúrate de tener buena conexión a internet"
-    echo -e "  • No cierres Termux durante la instalación"
-    echo -e "  • El proceso puede tomar 10-20 minutos"
-    echo ""
-    esperar_usuario
-fi
+clear
+mensaje_titulo "COMIDABOT - INSTALACIÓN EN TERMUX"
+echo ""
+echo -e "${BLANCO}Este instalador configurará todo lo necesario para:${NC}"
+echo -e "  ${VERDE}•${NC} WhatsApp Bot con Baileys"
+echo -e "  ${VERDE}•${NC} Whisper.cpp para reconocimiento de voz"
+echo -e "  ${VERDE}•${NC} Base de datos SQLite"
+echo -e "  ${VERDE}•${NC} Sistema de menús diarios"
+echo -e "  ${VERDE}•${NC} Respuestas automáticas con spintax"
+echo ""
+echo -e "${AMARILLO}⚠️  IMPORTANTE:${NC}"
+echo -e "  • Asegúrate de tener buena conexión a internet"
+echo -e "  • No cierres Termux durante la instalación"
+echo -e "  • El proceso puede tomar 10-20 minutos"
+echo ""
+esperar_usuario
 
 # =============================================
 # PASO 1: Actualizar Termux
@@ -140,7 +138,7 @@ else
 fi
 
 # =============================================
-# PASO 3: Crear directorio del proyecto (CORREGIDO)
+# PASO 3: Crear directorio del proyecto (CORREGIDO - sin preguntas)
 # =============================================
 if [ "$PASO_ACTUAL" -lt 3 ]; then
     clear
@@ -148,7 +146,7 @@ if [ "$PASO_ACTUAL" -lt 3 ]; then
 
     cd ~
     if [ -d "comidabot" ]; then
-        mensaje_advertencia "El directorio comidabot ya existe. Continuando con la instalación..."
+        mensaje_advertencia "El directorio comidabot ya existe. Continuando..."
     else
         mkdir -p ~/comidabot
         mensaje_ok "Directorio creado en ~/comidabot"
@@ -160,13 +158,14 @@ else
 fi
 
 # =============================================
-# PASO 4: Instalar Whisper.cpp (CORREGIDO)
+# PASO 4: Instalar Whisper.cpp (CORREGIDO - verifica existencia)
 # =============================================
 if [ "$PASO_ACTUAL" -lt 4 ]; then
     clear
     mensaje_titulo "PASO 4/12 - INSTALANDO WHISPER.CPP (RECONOCIMIENTO DE VOZ)"
 
-    # Verificar si Whisper ya está instalado
+    cd ~/comidabot
+
     if [ -f "whisper.cpp/main" ] && [ -f "whisper.cpp/models/ggml-tiny.bin" ]; then
         mensaje_ok "Whisper.cpp ya está instalado"
     else
@@ -174,8 +173,6 @@ if [ "$PASO_ACTUAL" -lt 4 ]; then
             mensaje "Clonando repositorio de Whisper.cpp..."
             git clone https://github.com/ggerganov/whisper.cpp.git
             verificar_paso "Repositorio clonado" "Error al clonar Whisper.cpp" "Paso 4 - Git clone"
-        else
-            mensaje_advertencia "El directorio whisper.cpp ya existe. Usando el existente..."
         fi
 
         cd whisper.cpp
@@ -184,21 +181,17 @@ if [ "$PASO_ACTUAL" -lt 4 ]; then
             mensaje "Compilando Whisper.cpp (esto puede tomar varios minutos)..."
             make -j4
             verificar_paso "Compilación completada" "Error al compilar Whisper.cpp" "Paso 4 - Compilación"
-        else
-            mensaje_ok "Whisper.cpp ya está compilado"
         fi
 
         if [ ! -f "models/ggml-tiny.bin" ]; then
             mensaje "Descargando modelo TINY (75MB - el más liviano)..."
             bash ./models/download-ggml-model.sh tiny
             verificar_paso "Modelo TINY descargado" "Error al descargar modelo TINY" "Paso 4 - Descarga modelo"
-        else
-            mensaje_ok "Modelo TINY ya está descargado"
         fi
 
         cd ~/comidabot
+        mensaje_ok "Whisper.cpp instalado correctamente"
     fi
-    mensaje_ok "Whisper.cpp instalado correctamente"
     actualizar_estado 4
 else
     mensaje_ok "Paso 4 ya completado. Continuando..."
@@ -216,11 +209,8 @@ if [ "$PASO_ACTUAL" -lt 5 ]; then
     if [ ! -f "package.json" ]; then
         npm init -y
         verificar_paso "package.json creado" "Error al crear package.json" "Paso 5 - npm init"
-    else
-        mensaje_ok "package.json ya existe"
     fi
 
-    # Modificar package.json para tipo módulo (necesario para Baileys)
     cat > package.json << 'EOF'
 {
   "name": "comidabot",
@@ -245,7 +235,7 @@ else
 fi
 
 # =============================================
-# PASO 6: Instalar dependencias de Node.js (CORREGIDO)
+# PASO 6: Instalar dependencias de Node.js (CORREGIDO - verifica cada una)
 # =============================================
 if [ "$PASO_ACTUAL" -lt 6 ]; then
     clear
@@ -253,13 +243,10 @@ if [ "$PASO_ACTUAL" -lt 6 ]; then
 
     cd ~/comidabot
 
-    mensaje "Verificando dependencias npm..."
-
     if [ ! -d "node_modules/@whiskeysockets/baileys" ]; then
+        mensaje "Instalando @whiskeysockets/baileys..."
         npm install @whiskeysockets/baileys
         verificar_paso "@whiskeysockets/baileys instalado" "Error al instalar baileys" "Paso 6 - baileys"
-    else
-        mensaje_ok "@whiskeysockets/baileys ya está instalado"
     fi
 
     if [ ! -d "node_modules/pino" ]; then
@@ -286,14 +273,14 @@ if [ "$PASO_ACTUAL" -lt 6 ]; then
         npm install audio-decode
     fi
 
-    verificar_paso "Dependencias npm verificadas" "Error al instalar dependencias npm" "Paso 6 - npm install"
+    mensaje_ok "Dependencias npm verificadas"
     actualizar_estado 6
 else
     mensaje_ok "Paso 6 ya completado. Continuando..."
 fi
 
 # =============================================
-# PASO 7: Crear estructura de directorios (CORREGIDO)
+# PASO 7: Crear estructura de directorios (CORREGIDO - sin verificación)
 # =============================================
 if [ "$PASO_ACTUAL" -lt 7 ]; then
     clear
@@ -310,14 +297,14 @@ if [ "$PASO_ACTUAL" -lt 7 ]; then
     mkdir -p logs
     mkdir -p audios
 
-    mensaje_ok "Estructura de directorios creada/verificada"
+    mensaje_ok "Estructura de directorios creada"
     actualizar_estado 7
 else
     mensaje_ok "Paso 7 ya completado. Continuando..."
 fi
 
 # =============================================
-# PASO 8: Crear base de datos SQLite (CORREGIDO)
+# PASO 8: Crear base de datos SQLite (CORREGIDO - verifica existencia)
 # =============================================
 if [ "$PASO_ACTUAL" -lt 8 ]; then
     clear
@@ -485,77 +472,57 @@ if [ "$PASO_ACTUAL" -lt 10 ]; then
 
     cd ~/comidabot
 
-    # Verificar si los números ya están configurados
-    NUMERO_BOT_ACTUAL=$(grep -o '"numero_bot": "[^"]*"' config.json 2>/dev/null | cut -d'"' -f4)
-    NUMERO_DUENO_ACTUAL=$(grep -o '"numero_dueño": "[^"]*"' config.json 2>/dev/null | cut -d'"' -f4)
+    echo ""
+    echo "========================================="
+    echo "CONFIGURACIÓN DE NÚMEROS DE TELÉFONO"
+    echo "========================================="
+    echo ""
+    echo "📱 Ingresa los números en formato: 5215512345678"
+    echo "   (código de país + número sin espacios)"
+    echo "   Ejemplo: 5215551234567"
+    echo ""
 
-    if [ -n "$NUMERO_BOT_ACTUAL" ] && [ -n "$NUMERO_DUENO_ACTUAL" ] && [ "$NUMERO_BOT_ACTUAL" != "" ] && [ "$NUMERO_DUENO_ACTUAL" != "" ]; then
-        mensaje_ok "Números ya configurados: Bot: $NUMERO_BOT_ACTUAL, Dueño: $NUMERO_DUENO_ACTUAL"
-        echo ""
-        echo -e "${BLANCO}¿Deseas cambiarlos? (s/n)${NC}"
+    # Número del BOT
+    while true; do
+        echo -e "${BLANCO}Número del BOT (atenderá clientes):${NC}"
         echo -n "> "
-        read -r CAMBIAR
-        if [[ ! $CAMBIAR =~ ^[Ss]$ ]]; then
-            mensaje "Usando configuración existente"
-            actualizar_estado 10
-            # Saltar al paso 11
+        read NUMERO_BOT
+        if [ -n "$NUMERO_BOT" ]; then
+            NUMERO_BOT=$(echo "$NUMERO_BOT" | tr -d ' ')
+            break
+        else
+            echo -e "${AMARILLO}⚠️  El número no puede estar vacío. Intenta de nuevo.${NC}"
         fi
-    fi
+    done
 
-    # Solo pedir números si no están configurados o si el usuario quiere cambiarlos
-    if [ "$PASO_ACTUAL" -lt 10 ] || [[ $CAMBIAR =~ ^[Ss]$ ]]; then
-        echo ""
-        echo "========================================="
-        echo "CONFIGURACIÓN DE NÚMEROS DE TELÉFONO"
-        echo "========================================="
-        echo ""
-        echo "📱 Ingresa los números en formato: 5215512345678"
-        echo "   (código de país + número sin espacios)"
-        echo "   Ejemplo: 5215551234567"
-        echo ""
+    echo ""
 
-        # Número del BOT - Validación simple
-        while true; do
-            echo -e "${BLANCO}Número del BOT (atenderá clientes):${NC}"
-            echo -n "> "
-            read NUMERO_BOT
-            if [ -n "$NUMERO_BOT" ]; then
-                # Eliminar espacios en blanco accidentales
-                NUMERO_BOT=$(echo "$NUMERO_BOT" | tr -d ' ')
-                break
-            else
-                echo -e "${AMARILLO}⚠️  El número no puede estar vacío. Intenta de nuevo.${NC}"
-            fi
-        done
+    # Número del DUEÑO
+    while true; do
+        echo -e "${BLANCO}Número del DUEÑO (dará instrucciones):${NC}"
+        echo -n "> "
+        read NUMERO_DUENO
+        if [ -n "$NUMERO_DUENO" ]; then
+            NUMERO_DUENO=$(echo "$NUMERO_DUENO" | tr -d ' ')
+            break
+        else
+            echo -e "${AMARILLO}⚠️  El número no puede estar vacío. Intenta de nuevo.${NC}"
+        fi
+    done
 
-        echo ""
+    # Guardar números en config.json
+    sed -i "s/\"numero_bot\": \"\"/\"numero_bot\": \"$NUMERO_BOT\"/" config.json
+    sed -i "s/\"numero_dueño\": \"\"/\"numero_dueño\": \"$NUMERO_DUENO\"/" config.json
 
-        # Número del DUEÑO - Validación simple
-        while true; do
-            echo -e "${BLANCO}Número del DUEÑO (dará instrucciones):${NC}"
-            echo -n "> "
-            read NUMERO_DUENO
-            if [ -n "$NUMERO_DUENO" ]; then
-                NUMERO_DUENO=$(echo "$NUMERO_DUENO" | tr -d ' ')
-                break
-            else
-                echo -e "${AMARILLO}⚠️  El número no puede estar vacío. Intenta de nuevo.${NC}"
-            fi
-        done
+    # Insertar número de dueño en base de datos como autorizado
+    sqlite3 comidabot.db "INSERT OR IGNORE INTO autorizados (numero, rol) VALUES ('$NUMERO_DUENO', 'dueño');"
 
-        # Guardar números en config.json
-        sed -i "s/\"numero_bot\": \"\"/\"numero_bot\": \"$NUMERO_BOT\"/" config.json
-        sed -i "s/\"numero_dueño\": \"\"/\"numero_dueño\": \"$NUMERO_DUENO\"/" config.json
-
-        # Insertar número de dueño en base de datos como autorizado
-        sqlite3 comidabot.db "INSERT OR IGNORE INTO autorizados (numero, rol) VALUES ('$NUMERO_DUENO', 'dueño');"
-
-        echo ""
-        mensaje_ok "Números guardados correctamente"
-        echo "   Bot: $NUMERO_BOT"
-        echo "   Dueño: $NUMERO_DUENO"
-        echo ""
-    fi
+    echo ""
+    mensaje_ok "Números guardados correctamente"
+    echo "   Bot: $NUMERO_BOT"
+    echo "   Dueño: $NUMERO_DUENO"
+    echo ""
+    
     actualizar_estado 10
 else
     mensaje_ok "Paso 10 ya completado. Continuando..."
@@ -579,7 +546,6 @@ import { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'fs';
 
-// Leer configuración
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const numeroBot = config.numero_bot;
 
@@ -594,10 +560,9 @@ async function emparejar() {
     const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, // No usaremos QR
+        printQRInTerminal: false,
     });
 
-    // Solicitar código de emparejamiento
     setTimeout(async () => {
         const code = await sock.requestPairingCode(numeroBot);
         console.log('\x1b[32m%s\x1b[0m', '🔑 CÓDIGO DE EMPAREJAMIENTO:');
@@ -611,12 +576,9 @@ async function emparejar() {
         console.log('4. Ingresa este código exactamente como aparece\n');
     }, 1000);
 
-    // Evento cuando se actualizan las credenciales
     sock.ev.on('creds.update', saveCreds);
-
-    // Evento cuando se conecta exitosamente
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection } = update;
         if (connection === 'open') {
             console.log('\x1b[32m%s\x1b[0m', '✅ ¡EMPAREJAMIENTO EXITOSO!');
             console.log('El Bot ya está conectado y listo para usar.\n');
@@ -659,26 +621,19 @@ import { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'fs';
 import sqlite3 from 'sqlite3';
-import { exec } from 'child_process';
-import { fileURLToPath } from 'url';
-import path from 'path';
 
-// Configuración
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const db = new sqlite3.Database(config.db_path);
 
-// Función para delay aleatorio
 const delay = (min, max) => new Promise(resolve => 
     setTimeout(resolve, Math.floor(Math.random() * (max - min + 1) + min))
 );
 
-// Función para activar typing
 const sendTyping = async (sock, jid, time) => {
     await sock.sendPresenceUpdate('composing', jid);
     await delay(time, time);
 };
 
-// Procesar mensajes entrantes
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
     
@@ -699,26 +654,17 @@ async function startBot() {
         
         console.log(`Mensaje de ${from}: ${text}`);
         
-        // Verificar si es número autorizado (dueño)
         db.get('SELECT * FROM autorizados WHERE numero = ?', [from.split('@')[0]], async (err, autorizado) => {
             if (err) console.error(err);
             
             if (isAudio && autorizado) {
-                // Procesar audio del dueño
                 await sendTyping(sock, from, 5000);
                 await sock.sendMessage(from, { text: '🎤 Procesando tu audio...' });
-                
-                // Aquí se integrará Whisper para transcribir
-                // Por ahora solo un placeholder
                 await delay(3000, 5000);
                 await sock.sendMessage(from, { text: 'Audio procesado (placeholder)' });
-                
             } else if (!isAudio) {
-                // Responder a clientes
                 await sendTyping(sock, from, config.typing_min * 1000);
                 await delay(config.delay_min * 1000, config.delay_max * 1000);
-                
-                // Respuesta de prueba
                 await sock.sendMessage(from, { text: '🤖 Bot funcionando correctamente\nPronto implementaremos las respuestas reales' });
             }
         });
