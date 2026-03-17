@@ -131,14 +131,14 @@ then
         mensaje "Directorio eliminado"
         mkdir -p ~/comidabot
     else
-        mensaje "Manteniendo directorio existente..."
+        mensaje "Continuando con el directorio existente..."
     fi
 else
     mkdir -p ~/comidabot
 fi
 
 cd ~/comidabot
-verificar_paso "Directorio listo en ~/comidabot" "Error al acceder al directorio" "Paso 3 - Directorio"
+verificar_paso "Directorio listo" "Error al acceder al directorio" "Paso 3 - Directorio"
 
 # =============================================
 # PASO 4: Instalar Whisper.cpp
@@ -146,8 +146,9 @@ verificar_paso "Directorio listo en ~/comidabot" "Error al acceder al directorio
 clear
 mensaje_titulo "PASO 4/12 - INSTALANDO WHISPER.CPP (RECONOCIMIENTO DE VOZ)"
 
+# Solución técnica estándar: Verificar existencia antes de clonar
 if [ -d "whisper.cpp" ]; then
-    mensaje "El repositorio ya existe, accediendo..."
+    mensaje "El repositorio de Whisper.cpp ya existe, accediendo..."
     cd whisper.cpp
 else
     mensaje "Clonando repositorio de Whisper.cpp..."
@@ -157,17 +158,24 @@ else
 fi
 
 mensaje "Compilando Whisper.cpp (esto puede tomar varios minutos)..."
-make -j4
-verificar_paso "Compilación completada" "Error al compilar Whisper.cpp" "Paso 4 - Compilación"
+# Solo compila si no existe el binario principal
+if [ ! -f "main" ]; then
+    make -j4
+    verificar_paso "Compilación completada" "Error al compilar Whisper.cpp" "Paso 4 - Compilación"
+else
+    mensaje_ok "Whisper.cpp ya está compilado"
+fi
 
 if [ ! -f "models/ggml-tiny.bin" ]; then
     mensaje "Descargando modelo TINY (75MB - el más liviano)..."
     bash ./models/download-ggml-model.sh tiny
     verificar_paso "Modelo TINY descargado" "Error al descargar modelo TINY" "Paso 4 - Descarga modelo"
+else
+    mensaje_ok "Modelo TINY ya presente"
 fi
 
 cd ~/comidabot
-mensaje_ok "Whisper.cpp instalado correctamente"
+mensaje_ok "Whisper.cpp configurado correctamente"
 
 # =============================================
 # PASO 5: Inicializar proyecto Node.js
@@ -178,7 +186,6 @@ mensaje_titulo "PASO 5/12 - INICIALIZANDO PROYECTO NODE.JS"
 cd ~/comidabot
 if [ ! -f "package.json" ]; then
     npm init -y
-    # Modificar package.json para tipo módulo
     cat > package.json << 'EOF'
 {
   "name": "comidabot",
@@ -205,6 +212,7 @@ clear
 mensaje_titulo "PASO 6/12 - INSTALANDO DEPENDENCIAS NODE.JS"
 
 mensaje "Instalando paquetes npm (esto puede tomar varios minutos)..."
+# npm install es inteligente y no reinstala lo que ya existe
 npm install @whiskeysockets/baileys pino sqlite3 node-fetch fluent-ffmpeg qrcode-terminal audio-decode
 verificar_paso "Dependencias npm instaladas" "Error al instalar dependencias npm" "Paso 6 - npm install"
 
@@ -357,6 +365,7 @@ mensaje_ok "Archivo config.json creado"
 clear
 mensaje_titulo "PASO 10/12 - CONFIGURACIÓN DE NÚMEROS"
 
+# Implementación de bucle infinito hasta recibir datos (Estándar de terminal física)
 NUMERO_BOT=""
 while [ -z "$NUMERO_BOT" ]; do
     echo ""
@@ -364,6 +373,7 @@ while [ -z "$NUMERO_BOT" ]; do
     echo -e "Formato: 5215512345678 (código de país + número sin espacios)"
     echo -e "${AMARILLO}Ejemplo: 5215551234567${NC}"
     echo -n "> "
+    # Forzar lectura directa de la terminal física
     read NUMERO_BOT < /dev/tty
     if [ -z "$NUMERO_BOT" ]; then
         mensaje_error "El número del bot es obligatorio"
@@ -498,11 +508,10 @@ EOF
 verificar_paso "Script principal creado" "Error al crear bot.js" "Paso 12"
 
 # =============================================
-# CREAR ARCHIVO README
+# FINALIZACIÓN
 # =============================================
-cat > README.md << 'EOF'
-# COMIDABOT - Bot de WhatsApp para Comidas Corridas
-
-## Instalación (un solo comando)
-```bash
-curl -sSL [https://raw.githubusercontent.com/TU_USUARIO/comidabot/main/install.sh](https://raw.githubusercontent.com/TU_USUARIO/comidabot/main/install.sh) | bash
+mensaje_ok "¡Instalación completada exitosamente!"
+echo ""
+echo -e "${AMARILLO}Para iniciar el emparejamiento con WhatsApp, ejecuta:${NC}"
+echo -e "${BLANCO}cd ~/comidabot && node emparejar.js${NC}"
+echo ""
