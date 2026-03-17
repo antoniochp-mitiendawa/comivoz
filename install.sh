@@ -1,207 +1,96 @@
 #!/bin/bash
 
 # ====================================
-# COMIVOZ - INSTALADOR AUTOMÁTICO
-# Un solo comando, todo listo
+# COMIVOZ - INSTALACIÓN COMPLETA
+# Un solo comando - TODO INCLUIDO
 # ====================================
 
-# Eliminar caracteres Windows si existen
-sed -i 's/\r$//' "$0" 2>/dev/null
+# Limpiar caracteres Windows si existen
+sed -i 's/\r$//' "$0"
 
 clear
 echo "===================================="
-echo "  COMIVOZ - INSTALACIÓN AUTOMÁTICA"
-echo "  Un solo comando, todo listo"
+echo "  COMIVOZ - INSTALACIÓN COMPLETA"
+echo "  Un solo comando - TODO INCLUIDO"
 echo "===================================="
 echo ""
 
-# PASO 1: Actualizar Termux
-echo "[1/9] Actualizando Termux..."
+echo "[1/7] Configurando Termux..."
+termux-setup-storage
 pkg update -y
 pkg upgrade -y
 
-# PASO 2: Instalar paquetes necesarios
-echo "[2/9] Instalando paquetes necesarios..."
-pkg install -y nodejs ffmpeg git wget
+echo "[2/7] Instalando lo necesario..."
+pkg install -y nodejs ffmpeg wget
 
-# PASO 3: Crear carpetas del proyecto
-echo "[3/9] Creando estructura de carpetas..."
+echo "[3/7] Creando carpetas..."
 mkdir -p comivoz
 cd comivoz
 mkdir -p database
-mkdir -p models
 mkdir -p auth_info
 
-# PASO 4: Descargar modelo Vosk (español - 40MB)
-echo "[4/9] Descargando modelo de voz Vosk español (40MB)..."
-cd models
-wget -q --show-progress https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
-unzip -q vosk-model-small-es-0.42.zip
-rm vosk-model-small-es-0.42.zip
-mv vosk-model-small-es-0.42 vosk-model
-cd ..
+echo "[4/7] Descargando modelo de voz..."
+wget -O vosk.zip https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+unzip vosk.zip
+rm vosk.zip
+mv vosk-model-small-es-0.42 modelo-voz
 
-# PASO 5: Crear package.json e instalar dependencias
-echo "[5/9] Instalando dependencias de Node.js..."
-cat > package.json << 'EOF'
-{
-  "name": "comivoz",
-  "version": "1.0.0",
-  "description": "Sistema de menú por voz",
-  "main": "bot.js",
-  "dependencies": {
-    "@whiskeysockets/baileys": "^6.5.0",
-    "sqlite3": "^5.1.6",
-    "vosk": "^0.3.45",
-    "fluent-ffmpeg": "^2.1.2"
-  }
-}
-EOF
+echo "[5/7] Instalando dependencias..."
+npm init -y
+npm install @whiskeysockets/baileys sqlite3 vosk fluent-ffmpeg
 
-npm install
+echo "[6/7] Configuración inicial"
+echo "------------------------"
+read -p "Número de la dueña (10 dígitos): " DUEÑA
+read -p "Número del bot (10 dígitos): " BOT
+read -p "Nombre del negocio: " NOMBRE
+read -p "Dirección: " DIR
+read -p "Horario: " HORARIO
 
-# PASO 6: Preguntar datos al usuario
-echo "[6/9] Configuración inicial (solo una vez)"
-echo "----------------------------------------"
-echo ""
-read -p "📱 Número de la dueña (10 dígitos, ej: 5512345678): " NUMERO_DUENA
-read -p "🤖 Número del bot (10 dígitos, ej: 5512345678): " NUMERO_BOT
-read -p "🏠 Nombre del negocio (ej: Lupita Comidas): " NOMBRE_NEGOCIO
-read -p "📍 Dirección (ej: Av. Principal #123): " DIRECCION
-read -p "🕒 Horario (ej: 8am a 5pm): " HORARIO
-echo ""
-
-# PASO 7: Guardar configuración
-echo "[7/9] Guardando configuración..."
 cat > config.json << EOF
 {
-  "numero_duena": "$NUMERO_DUENA",
-  "numero_bot": "$NUMERO_BOT",
-  "nombre_negocio": "$NOMBRE_NEGOCIO",
-  "direccion": "$DIRECCION",
+  "dueña": "$DUEÑA",
+  "bot": "$BOT",
+  "nombre": "$NOMBRE",
+  "direccion": "$DIR",
   "horario": "$HORARIO",
-  "domicilio_activo": false,
-  "telefono_domicilio": ""
+  "domicilio": false,
+  "domicilio_tel": ""
 }
 EOF
 
-# PASO 8: Crear base de datos SQLite
-echo "[8/9] Creando base de datos..."
-cat > database/schema.sql << 'EOF'
-CREATE TABLE IF NOT EXISTS desayunos (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  nombre TEXT NOT NULL,
-  precio INTEGER NOT NULL,
-  disponible INTEGER DEFAULT 1,
-  fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS primer_tiempo (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  nombre TEXT NOT NULL,
-  disponible INTEGER DEFAULT 1,
-  fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS segundo_tiempo (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  nombre TEXT NOT NULL,
-  disponible INTEGER DEFAULT 1,
-  fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS tercer_tiempo (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  nombre TEXT NOT NULL,
-  disponible INTEGER DEFAULT 1,
-  fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS bebida (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  nombre TEXT NOT NULL,
-  disponible INTEGER DEFAULT 1,
-  fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS postre (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  nombre TEXT NOT NULL,
-  disponible INTEGER DEFAULT 1,
-  fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS precio_comida (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  precio INTEGER NOT NULL,
-  fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS domicilio_config (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  activo INTEGER DEFAULT 0,
-  telefono_reenvio TEXT,
-  fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS solicitudes_domicilio (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  numero_cliente TEXT NOT NULL,
-  fecha_hora DATETIME DEFAULT CURRENT_TIMESTAMP,
-  estado TEXT DEFAULT 'pendiente'
-);
-EOF
-
-sqlite3 database/comivoz.db < database/schema.sql
+echo "[7/7] Creando base de datos..."
+sqlite3 comida.db << SQL
+CREATE TABLE desayunos (id INTEGER PRIMARY KEY, nombre TEXT, precio INTEGER, disponible INTEGER DEFAULT 1);
+CREATE TABLE primer_tiempo (id INTEGER PRIMARY KEY, nombre TEXT, disponible INTEGER DEFAULT 1);
+CREATE TABLE segundo_tiempo (id INTEGER PRIMARY KEY, nombre TEXT, disponible INTEGER DEFAULT 1);
+CREATE TABLE tercer_tiempo (id INTEGER PRIMARY KEY, nombre TEXT, disponible INTEGER DEFAULT 1);
+CREATE TABLE bebida (id INTEGER PRIMARY KEY, nombre TEXT, disponible INTEGER DEFAULT 1);
+CREATE TABLE postre (id INTEGER PRIMARY KEY, nombre TEXT, disponible INTEGER DEFAULT 1);
+CREATE TABLE precio_comida (id INTEGER PRIMARY KEY, precio INTEGER);
+CREATE TABLE domicilio (id INTEGER PRIMARY KEY, activo INTEGER DEFAULT 0, telefono TEXT);
+SQL
 
 echo ""
 echo "===================================="
-echo "✅ INSTALACIÓN COMPLETADA"
+echo "✅ TODO LISTO"
 echo "===================================="
 echo ""
-echo "📱 Número de la dueña: $NUMERO_DUENA"
-echo "🤖 Número del bot: $NUMERO_BOT"
-echo "🏠 Negocio: $NOMBRE_NEGOCIO"
-echo ""
-echo "⚠️  IMPORTANTE:"
-echo "En tu WhatsApp ve a:"
-echo "Menú > Dispositivos vinculados > Vincular un dispositivo"
-echo ""
-echo "Presiona ENTER para generar el código de emparejamiento"
+
+echo "Ahora ve a WhatsApp > Dispositivos vinculados"
+echo "Presiona ENTER cuando estés listo"
 read
 
-# PASO 9: Generar código de emparejamiento
-echo "Generando código de emparejamiento..."
 node -e "
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-
 async function main() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-  const sock = makeWASocket({ 
-    auth: state,
-    browser: ['ComiVoz', 'Safari', '1.0.0']
-  });
-  
+  const sock = makeWASocket({ auth: state, browser: ['ComiVoz', 'Safari', '1.0.0'] });
   sock.ev.on('creds.update', saveCreds);
-  
   setTimeout(() => {
-    console.log('\\n🔑 CÓDIGO DE EMPAREJAMIENTO:');
-    console.log('====================================');
-    console.log(state.creds.registrationId);
-    console.log('====================================');
-    console.log('\\nCopia este código y pégalo en WhatsApp');
+    console.log('\\n🔑 CÓDIGO: ' + state.creds.registrationId);
     process.exit(0);
   }, 5000);
 }
-
-main().catch(err => {
-  console.error('Error:', err);
-  process.exit(1);
-});
+main();
 "
-
-echo ""
-echo "===================================="
-echo "🚀 INICIANDO COMIVOZ..."
-echo "===================================="
-node bot.js
