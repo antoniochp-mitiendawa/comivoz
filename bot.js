@@ -1,42 +1,54 @@
 // ====================================
 // COMIVOZ - BOT PRINCIPAL
-// Todo en un solo archivo
+// Versión corregida
 // ====================================
 
-const { makeWASocket, useMultiFileAuthState, proto } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
-const { Readable } = require('stream');
 const ffmpeg = require('fluent-ffmpeg');
 const vosk = require('vosk');
 
 // ====================================
 // CONFIGURACIÓN
 // ====================================
-const config = JSON.parse(fs.readFileSync('config.json'));
+let config;
+try {
+  config = JSON.parse(fs.readFileSync('config.json'));
+} catch (err) {
+  console.error('Error leyendo config.json');
+  process.exit(1);
+}
+
 const db = new sqlite3.Database('database/comivoz.db');
 
 // Modelo Vosk
 vosk.setLogLevel(-1);
 const modelPath = 'models/vosk-model';
-const model = new vosk.Model(modelPath);
-const rec = new vosk.Recognizer({ model: model, sampleRate: 16000 });
+let model, rec;
+try {
+  model = new vosk.Model(modelPath);
+  rec = new vosk.Recognizer({ model: model, sampleRate: 16000 });
+} catch (err) {
+  console.error('Error cargando modelo Vosk:', err);
+  process.exit(1);
+}
 
 // ====================================
 // SINÓNIMOS Y EMOJIS
 // ====================================
 const sinonimos = {
-  desayuno: ['desayuno', 'desayunos', 'para desayunar', 'mañana', 'lo de hoy en la mañana'],
-  primer_tiempo: ['primer tiempo', 'sopa', 'sopas', 'consomé', 'crema', 'cremas', 'entrada', 'de entrada', 'para empezar', 'caldo'],
-  segundo_tiempo: ['segundo tiempo', 'arroz', 'espagueti', 'pasta', 'guarnición', 'arrozcito', 'sopa seca'],
-  tercer_tiempo: ['tercer tiempo', 'guisado', 'guisados', 'platillo fuerte', 'carne', 'pollo', 'de fondo', 'plato fuerte'],
-  bebida: ['bebida', 'bebidas', 'agua', 'refresco', 'jugo', 'de tomar', 'para tomar', 'agüita', 'refresquito'],
-  postre: ['postre', 'postres', 'dulce', 'para endulzar', 'algo dulce', 'de postre'],
-  horario: ['horario', 'hora', 'abren', 'cierran', 'atienden', 'hasta qué hora', 'desde qué hora'],
-  direccion: ['dirección', 'ubicación', 'dónde están', 'cómo llegar', 'domicilio del local', 'calle'],
-  precio: ['precio', 'cuánto cuesta', 'en cuánto', 'costo', 'valor', 'cuánto es'],
-  domicilio: ['domicilio', 'envío', 'mandan', 'llevan', 'reparten', 'servicio a domicilio', 'para llevar']
+  desayuno: ['desayuno', 'desayunos', 'para desayunar', 'mañana'],
+  primer_tiempo: ['primer tiempo', 'sopa', 'sopas', 'consomé', 'crema', 'entrada'],
+  segundo_tiempo: ['segundo tiempo', 'arroz', 'espagueti', 'pasta'],
+  tercer_tiempo: ['tercer tiempo', 'guisado', 'guisados', 'platillo fuerte'],
+  bebida: ['bebida', 'bebidas', 'agua', 'refresco', 'jugo'],
+  postre: ['postre', 'postres', 'dulce'],
+  horario: ['horario', 'hora', 'abren', 'cierran', 'atienden'],
+  direccion: ['dirección', 'ubicación', 'dónde están'],
+  precio: ['precio', 'cuánto cuesta', 'costo'],
+  domicilio: ['domicilio', 'envío', 'mandan', 'reparten']
 };
 
 const emojis = {
@@ -81,26 +93,16 @@ function detectarIntencion(texto) {
 }
 
 function formatearNumeroMostrar(numero) {
-  // Quitar 521 si existe y devolver solo 10 dígitos
   let limpio = numero.replace(/\D/g, '');
-  if (limpio.startsWith('521')) {
-    limpio = limpio.substring(3);
-  }
-  if (limpio.startsWith('52')) {
-    limpio = limpio.substring(2);
-  }
+  if (limpio.startsWith('521')) limpio = limpio.substring(3);
+  if (limpio.startsWith('52')) limpio = limpio.substring(2);
   return limpio.substring(0, 10);
 }
 
 function formatearNumeroReenvio(numero) {
-  // Para reenviar internamente, debe tener 521
   let limpio = numero.replace(/\D/g, '');
-  if (limpio.startsWith('52')) {
-    limpio = limpio.substring(2);
-  }
-  if (!limpio.startsWith('521')) {
-    return '521' + limpio.substring(0, 10);
-  }
+  if (limpio.startsWith('52')) limpio = limpio.substring(2);
+  if (!limpio.startsWith('521')) return '521' + limpio.substring(0, 10);
   return limpio;
 }
 
@@ -139,40 +141,33 @@ async function procesarAudio(rutaAudio) {
 }
 
 // ====================================
-// INTERPRETAR INSTRUCCIONES DE LA DUEÑA
+// INTERPRETAR INSTRUCCIONES
 // ====================================
 
 async function interpretarInstruccion(texto, remitente) {
-  // Solo procesar si es la dueña
   if (formatearNumeroMostrar(remitente) !== formatearNumeroMostrar(config.numero_duena)) {
     return null;
   }
 
   texto = texto.toLowerCase();
 
-  // DETECTAR ACCIÓN
   if (texto.includes('agrega') || texto.includes('tenemos') || texto.includes('hay')) {
-    // AGREGAR PLATILLO
     return await agregarPlatillo(texto);
   }
   
   if (texto.includes('elimina') || texto.includes('quita') || texto.includes('se acabó')) {
-    // ELIMINAR PLATILLO
     return await eliminarPlatillo(texto);
   }
   
-  if (texto.includes('activa domicilio') || texto.includes('activar domicilio')) {
-    // ACTIVAR DOMICILIO
+  if (texto.includes('activa domicilio')) {
     return await activarDomicilio(texto);
   }
   
-  if (texto.includes('desactiva domicilio') || texto.includes('desactivar domicilio')) {
-    // DESACTIVAR DOMICILIO
+  if (texto.includes('desactiva domicilio')) {
     return await desactivarDomicilio();
   }
   
-  if (texto.includes('precio comida') || texto.includes('comida en')) {
-    // CAMBIAR PRECIO COMIDA
+  if (texto.includes('precio comida')) {
     return await cambiarPrecioComida(texto);
   }
 
@@ -180,35 +175,31 @@ async function interpretarInstruccion(texto, remitente) {
 }
 
 async function agregarPlatillo(texto) {
-  // Detectar categoría
   let categoria = null;
-  if (texto.includes('desayuno')) categoria = 'desayuno';
+  if (texto.includes('desayuno')) categoria = 'desayunos';
   else if (texto.includes('primer tiempo') || texto.includes('sopa')) categoria = 'primer_tiempo';
   else if (texto.includes('segundo tiempo') || texto.includes('arroz')) categoria = 'segundo_tiempo';
   else if (texto.includes('tercer tiempo') || texto.includes('guisado')) categoria = 'tercer_tiempo';
-  else if (texto.includes('bebida') || texto.includes('agua')) categoria = 'bebida';
+  else if (texto.includes('bebida')) categoria = 'bebida';
   else if (texto.includes('postre')) categoria = 'postre';
 
   if (!categoria) return '❌ No se pudo identificar la categoría';
 
-  // Extraer platillos (formato: "nombre precio" o solo nombre)
   const partes = texto.split(',');
   for (const parte of partes) {
     const matchPrecio = parte.match(/(.+?)\s+(\d+)\s*(pesos?|$)/i);
-    if (matchPrecio) {
+    if (matchPrecio && categoria === 'desayunos') {
       const nombre = matchPrecio[1].trim();
       const precio = parseInt(matchPrecio[2]);
-      
-      if (categoria === 'desayuno') {
-        db.run('INSERT INTO desayunos (nombre, precio) VALUES (?, ?)', [nombre, precio]);
-      } else {
-        db.run(`INSERT INTO ${categoria} (nombre) VALUES (?)`, [nombre]);
-      }
+      db.run('INSERT INTO desayunos (nombre, precio) VALUES (?, ?)', [nombre, precio]);
     } else {
-      // Sin precio (para sopas, arroces, etc.)
       const nombre = parte.trim();
-      if (nombre && !nombre.includes('precio')) {
-        db.run(`INSERT INTO ${categoria} (nombre) VALUES (?)`, [nombre]);
+      if (nombre && !nombre.includes('precio') && !nombre.includes('pesos')) {
+        if (categoria === 'desayunos') {
+          db.run('INSERT INTO desayunos (nombre, precio) VALUES (?, 0)', [nombre]);
+        } else {
+          db.run(`INSERT INTO ${categoria} (nombre) VALUES (?)`, [nombre]);
+        }
       }
     }
   }
@@ -217,12 +208,10 @@ async function agregarPlatillo(texto) {
 }
 
 async function eliminarPlatillo(texto) {
-  // Buscar nombre del platillo
   const palabras = texto.split(' ');
   let nombrePlatillo = '';
-  
-  // Ignorar palabras clave
   const ignorar = ['elimina', 'quita', 'se', 'acabó', 'ya', 'no'];
+  
   for (const palabra of palabras) {
     if (!ignorar.includes(palabra) && palabra.length > 3) {
       nombrePlatillo += palabra + ' ';
@@ -230,7 +219,6 @@ async function eliminarPlatillo(texto) {
   }
   nombrePlatillo = nombrePlatillo.trim();
 
-  // Buscar en todas las tablas
   const tablas = ['desayunos', 'primer_tiempo', 'segundo_tiempo', 'tercer_tiempo', 'bebida', 'postre'];
   
   for (const tabla of tablas) {
@@ -266,27 +254,22 @@ async function cambiarPrecioComida(texto) {
 }
 
 // ====================================
-// GENERAR RESPUESTAS PARA CLIENTES
+// GENERAR RESPUESTAS
 // ====================================
 
 async function generarRespuesta(intencion, textoOriginal) {
   const saludo = getSaludo();
+  const hora = new Date().getHours();
   
-  // Si pregunta por TODO el menú
+  // Menú completo
   if (!intencion || intencion === 'desayuno' || intencion === 'primer_tiempo') {
-    const hora = new Date().getHours();
-    
-    // ANTES DE 12: SOLO DESAYUNOS
     if (hora < 12) {
       return await generarRespuestaDesayunos(saludo);
-    }
-    // DESPUÉS DE 12: COMIDA COMPLETA
-    else {
+    } else {
       return await generarRespuestaComidaCompleta(saludo);
     }
   }
 
-  // Pregunta específica por categoría
   switch(intencion) {
     case 'desayuno':
       return await generarRespuestaDesayunos(saludo);
@@ -307,23 +290,22 @@ async function generarRespuesta(intencion, textoOriginal) {
     case 'precio':
       return await generarRespuestaPrecio();
     case 'domicilio':
-      return await generarRespuestaDomicilio(textoOriginal);
+      return await generarRespuestaDomicilio();
     default:
-      // Buscar platillo específico
-      return await buscarPlatilloEspecifico(textoOriginal);
+      return null;
   }
 }
 
 async function generarRespuestaDesayunos(saludo) {
   return new Promise((resolve) => {
     db.all('SELECT nombre, precio FROM desayunos WHERE disponible = 1', [], (err, rows) => {
-      if (err || rows.length === 0) {
+      if (err || !rows || rows.length === 0) {
         resolve(`${saludo.emoji} *${saludo.texto}* ${saludo.emoji}\n\nHoy no hay desayunos registrados.`);
         return;
       }
 
       let respuesta = `${saludo.emoji} *${saludo.texto}* ${saludo.emoji}\n\n`;
-      respuesta += `${emojis.desayuno} *DESAYUNOS* (hasta las 12:00 pm)\n`;
+      respuesta += `${emojis.desayuno} *DESAYUNOS*\n`;
       respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
       
       rows.forEach(row => {
@@ -335,7 +317,7 @@ async function generarRespuestaDesayunos(saludo) {
       respuesta += `🕒 ${config.horario}\n`;
       respuesta += `📍 ${config.direccion}\n`;
       respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      respuesta += `¡Estamos a tus órdenes! 🤗`;
+      respuesta += `¡Te esperamos! 🤗`;
       
       resolve(respuesta);
     });
@@ -345,75 +327,57 @@ async function generarRespuestaDesayunos(saludo) {
 async function generarRespuestaComidaCompleta(saludo) {
   return new Promise((resolve) => {
     db.get('SELECT precio FROM precio_comida ORDER BY fecha_actualizacion DESC LIMIT 1', [], (err, precioRow) => {
-      const precio = precioRow ? precioRow.precio : 'consultar';
-      
       let respuesta = `${saludo.emoji} *${saludo.texto}* ${saludo.emoji}\n\n`;
       
-      if (precio !== 'consultar') {
-        respuesta += `Comida corrida hoy *$${precio}* (incluye todo)\n\n`;
+      if (precioRow) {
+        respuesta += `Comida corrida hoy *$${precioRow.precio}*\n\n`;
       }
       
-      // Primer tiempo
       db.all('SELECT nombre FROM primer_tiempo WHERE disponible = 1', [], (err1, primerRows) => {
         if (primerRows && primerRows.length > 0) {
           respuesta += `${emojis.primer_tiempo} *PRIMER TIEMPO*\n`;
           respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-          primerRows.forEach(row => {
-            respuesta += `• ${row.nombre}\n`;
-          });
+          primerRows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
           respuesta += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
         }
         
-        // Segundo tiempo
         db.all('SELECT nombre FROM segundo_tiempo WHERE disponible = 1', [], (err2, segundoRows) => {
           if (segundoRows && segundoRows.length > 0) {
             respuesta += `${emojis.segundo_tiempo} *SEGUNDO TIEMPO*\n`;
             respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-            segundoRows.forEach(row => {
-              respuesta += `• ${row.nombre}\n`;
-            });
+            segundoRows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
             respuesta += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
           }
           
-          // Tercer tiempo
           db.all('SELECT nombre FROM tercer_tiempo WHERE disponible = 1', [], (err3, tercerRows) => {
             if (tercerRows && tercerRows.length > 0) {
               respuesta += `${emojis.tercer_tiempo} *TERCER TIEMPO*\n`;
               respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-              tercerRows.forEach(row => {
-                respuesta += `• ${row.nombre}\n`;
-              });
+              tercerRows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
               respuesta += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
             }
             
-            // Bebida y postre
             db.all('SELECT nombre FROM bebida WHERE disponible = 1', [], (err4, bebidaRows) => {
               db.all('SELECT nombre FROM postre WHERE disponible = 1', [], (err5, postreRows) => {
                 
                 if (bebidaRows && bebidaRows.length > 0) {
                   respuesta += `${emojis.bebida} *BEBIDA*\n`;
                   respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-                  bebidaRows.forEach(row => {
-                    respuesta += `• ${row.nombre}\n`;
-                  });
+                  bebidaRows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
                   respuesta += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
                 }
                 
                 if (postreRows && postreRows.length > 0) {
                   respuesta += `${emojis.postre} *POSTRE*\n`;
                   respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-                  postreRows.forEach(row => {
-                    respuesta += `• ${row.nombre}\n`;
-                  });
+                  postreRows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
                   respuesta += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
                 }
                 
-                // Cierre
                 respuesta += `🕒 ${config.horario}\n`;
                 respuesta += `📍 ${config.direccion}\n`;
                 
-                // Verificar domicilio
-                db.get('SELECT activo, telefono_reenvio FROM domicilio_config WHERE id = 1', [], (err6, domRow) => {
+                db.get('SELECT activo FROM domicilio_config WHERE id = 1', [], (err6, domRow) => {
                   if (domRow && domRow.activo === 1) {
                     respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
                     respuesta += `${emojis.domicilio} *DOMICILIO*\n`;
@@ -423,7 +387,6 @@ async function generarRespuestaComidaCompleta(saludo) {
                   
                   respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
                   respuesta += `¡Te esperamos! 🤗`;
-                  
                   resolve(respuesta);
                 });
               });
@@ -438,18 +401,13 @@ async function generarRespuestaComidaCompleta(saludo) {
 async function generarRespuestaPrimerTiempo() {
   return new Promise((resolve) => {
     db.all('SELECT nombre FROM primer_tiempo WHERE disponible = 1', [], (err, rows) => {
-      if (err || rows.length === 0) {
-        resolve(`${emojis.primer_tiempo} *PRIMER TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay sopas registradas.\n━━━━━━━━━━━━━━━━━━━━━`);
+      if (!rows || rows.length === 0) {
+        resolve(`${emojis.primer_tiempo} *PRIMER TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay sopas registradas.`);
         return;
       }
-      
-      let respuesta = `${emojis.primer_tiempo} *PRIMER TIEMPO*\n`;
-      respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      rows.forEach(row => {
-        respuesta += `• ${row.nombre}\n`;
-      });
+      let respuesta = `${emojis.primer_tiempo} *PRIMER TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\n`;
+      rows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
       respuesta += `━━━━━━━━━━━━━━━━━━━━━`;
-      
       resolve(respuesta);
     });
   });
@@ -458,18 +416,13 @@ async function generarRespuestaPrimerTiempo() {
 async function generarRespuestaSegundoTiempo() {
   return new Promise((resolve) => {
     db.all('SELECT nombre FROM segundo_tiempo WHERE disponible = 1', [], (err, rows) => {
-      if (err || rows.length === 0) {
-        resolve(`${emojis.segundo_tiempo} *SEGUNDO TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay arroz/espagueti registrados.\n━━━━━━━━━━━━━━━━━━━━━`);
+      if (!rows || rows.length === 0) {
+        resolve(`${emojis.segundo_tiempo} *SEGUNDO TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay arroz/espagueti registrados.`);
         return;
       }
-      
-      let respuesta = `${emojis.segundo_tiempo} *SEGUNDO TIEMPO*\n`;
-      respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      rows.forEach(row => {
-        respuesta += `• ${row.nombre}\n`;
-      });
+      let respuesta = `${emojis.segundo_tiempo} *SEGUNDO TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\n`;
+      rows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
       respuesta += `━━━━━━━━━━━━━━━━━━━━━`;
-      
       resolve(respuesta);
     });
   });
@@ -478,18 +431,13 @@ async function generarRespuestaSegundoTiempo() {
 async function generarRespuestaTercerTiempo() {
   return new Promise((resolve) => {
     db.all('SELECT nombre FROM tercer_tiempo WHERE disponible = 1', [], (err, rows) => {
-      if (err || rows.length === 0) {
-        resolve(`${emojis.tercer_tiempo} *TERCER TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay guisados registrados.\n━━━━━━━━━━━━━━━━━━━━━`);
+      if (!rows || rows.length === 0) {
+        resolve(`${emojis.tercer_tiempo} *TERCER TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay guisados registrados.`);
         return;
       }
-      
-      let respuesta = `${emojis.tercer_tiempo} *TERCER TIEMPO*\n`;
-      respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      rows.forEach(row => {
-        respuesta += `• ${row.nombre}\n`;
-      });
+      let respuesta = `${emojis.tercer_tiempo} *TERCER TIEMPO*\n━━━━━━━━━━━━━━━━━━━━━\n`;
+      rows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
       respuesta += `━━━━━━━━━━━━━━━━━━━━━`;
-      
       resolve(respuesta);
     });
   });
@@ -498,18 +446,13 @@ async function generarRespuestaTercerTiempo() {
 async function generarRespuestaBebida() {
   return new Promise((resolve) => {
     db.all('SELECT nombre FROM bebida WHERE disponible = 1', [], (err, rows) => {
-      if (err || rows.length === 0) {
-        resolve(`${emojis.bebida} *BEBIDA*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay bebidas registradas.\n━━━━━━━━━━━━━━━━━━━━━`);
+      if (!rows || rows.length === 0) {
+        resolve(`${emojis.bebida} *BEBIDA*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay bebidas registradas.`);
         return;
       }
-      
-      let respuesta = `${emojis.bebida} *BEBIDA*\n`;
-      respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      rows.forEach(row => {
-        respuesta += `• ${row.nombre}\n`;
-      });
+      let respuesta = `${emojis.bebida} *BEBIDA*\n━━━━━━━━━━━━━━━━━━━━━\n`;
+      rows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
       respuesta += `━━━━━━━━━━━━━━━━━━━━━`;
-      
       resolve(respuesta);
     });
   });
@@ -518,18 +461,13 @@ async function generarRespuestaBebida() {
 async function generarRespuestaPostre() {
   return new Promise((resolve) => {
     db.all('SELECT nombre FROM postre WHERE disponible = 1', [], (err, rows) => {
-      if (err || rows.length === 0) {
-        resolve(`${emojis.postre} *POSTRE*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay postres registrados.\n━━━━━━━━━━━━━━━━━━━━━`);
+      if (!rows || rows.length === 0) {
+        resolve(`${emojis.postre} *POSTRE*\n━━━━━━━━━━━━━━━━━━━━━\nHoy no hay postres registrados.`);
         return;
       }
-      
-      let respuesta = `${emojis.postre} *POSTRE*\n`;
-      respuesta += `━━━━━━━━━━━━━━━━━━━━━\n`;
-      rows.forEach(row => {
-        respuesta += `• ${row.nombre}\n`;
-      });
+      let respuesta = `${emojis.postre} *POSTRE*\n━━━━━━━━━━━━━━━━━━━━━\n`;
+      rows.forEach(row => { respuesta += `• ${row.nombre}\n`; });
       respuesta += `━━━━━━━━━━━━━━━━━━━━━`;
-      
       resolve(respuesta);
     });
   });
@@ -538,122 +476,26 @@ async function generarRespuestaPostre() {
 async function generarRespuestaPrecio() {
   return new Promise((resolve) => {
     db.get('SELECT precio FROM precio_comida ORDER BY fecha_actualizacion DESC LIMIT 1', [], (err, row) => {
-      if (err || !row) {
-        resolve(`${emojis.precio} *PRECIO*\n━━━━━━━━━━━━━━━━━━━━━\nConsulta el precio directamente con nosotros.\n━━━━━━━━━━━━━━━━━━━━━`);
+      if (!row) {
+        resolve(`${emojis.precio} *PRECIO*\n━━━━━━━━━━━━━━━━━━━━━\nConsulta el precio directamente con nosotros.`);
         return;
       }
-      
-      resolve(`${emojis.precio} *PRECIO*\n━━━━━━━━━━━━━━━━━━━━━\nLa comida corrida hoy está en *$${row.precio}*\n\nIncluye: primer tiempo, segundo tiempo, guisado, bebida y postre.\n━━━━━━━━━━━━━━━━━━━━━`);
+      resolve(`${emojis.precio} *PRECIO*\n━━━━━━━━━━━━━━━━━━━━━\nLa comida corrida hoy está en *$${row.precio}*\n━━━━━━━━━━━━━━━━━━━━━`);
     });
   });
 }
 
-async function generarRespuestaDomicilio(textoOriginal) {
+async function generarRespuestaDomicilio() {
   return new Promise((resolve) => {
-    db.get('SELECT activo, telefono_reenvio FROM domicilio_config WHERE id = 1', [], (err, row) => {
+    db.get('SELECT activo FROM domicilio_config WHERE id = 1', [], (err, row) => {
       if (!row || row.activo !== 1) {
-        resolve(`${emojis.domicilio} *SERVICIO A DOMICILIO*\n━━━━━━━━━━━━━━━━━━━━━\nPor el momento no tenemos servicio a domicilio.\n\nPuedes visitarnos en:\n📍 ${config.direccion}\n🕒 ${config.horario}\n━━━━━━━━━━━━━━━━━━━━━\n¡Te esperamos!`);
+        resolve(`${emojis.domicilio} *SERVICIO A DOMICILIO*\n━━━━━━━━━━━━━━━━━━━━━\nPor el momento no tenemos servicio a domicilio.\n\nPuedes visitarnos en:\n📍 ${config.direccion}\n🕒 ${config.horario}`);
         return;
       }
-      
-      // Si el texto ya contiene "sí" de una respuesta anterior
-      if (textoOriginal.toLowerCase().includes('sí') || textoOriginal.toLowerCase().includes('si')) {
-        // Esto se maneja en el evento de mensaje
-        resolve(null);
-      } else {
-        resolve(`${emojis.domicilio} *SERVICIO A DOMICILIO*\n━━━━━━━━━━━━━━━━━━━━━\nSí tenemos servicio a domicilio.\n\n¿Te interesa? Responde *SÍ* para que te llamemos y tomemos tu pedido.\n━━━━━━━━━━━━━━━━━━━━━`);
-      }
+      resolve(`${emojis.domicilio} *SERVICIO A DOMICILIO*\n━━━━━━━━━━━━━━━━━━━━━\nSí tenemos servicio a domicilio.\n\n¿Te interesa? Responde *SÍ* para que te llamemos.`);
     });
   });
 }
-
-async function buscarPlatilloEspecifico(texto) {
-  return new Promise((resolve) => {
-    const palabras = texto.toLowerCase().split(' ');
-    let nombreBuscar = '';
-    
-    // Tomar palabras relevantes (mayores a 3 letras)
-    for (const palabra of palabras) {
-      if (palabra.length > 3 && !['buenos', 'buenas', 'dias', 'tardes', 'noches', 'hola', 'como', 'cual', 'que'].includes(palabra)) {
-        nombreBuscar += palabra + ' ';
-      }
-    }
-    
-    if (!nombreBuscar) {
-      resolve(null);
-      return;
-    }
-    
-    nombreBuscar = nombreBuscar.trim();
-    
-    // Buscar en todas las tablas
-    const tablas = [
-      { nombre: 'desayunos', emoji: emojis.desayuno },
-      { nombre: 'primer_tiempo', emoji: emojis.primer_tiempo },
-      { nombre: 'segundo_tiempo', emoji: emojis.segundo_tiempo },
-      { nombre: 'tercer_tiempo', emoji: emojis.tercer_tiempo },
-      { nombre: 'bebida', emoji: emojis.bebida },
-      { nombre: 'postre', emoji: emojis.postre }
-    ];
-    
-    let resultados = [];
-    let tablasPendientes = tablas.length;
-    
-    tablas.forEach(tabla => {
-      db.all(`SELECT nombre, precio FROM ${tabla.nombre} WHERE nombre LIKE ? AND disponible = 1`, [`%${nombreBuscar}%`], (err, rows) => {
-        if (rows && rows.length > 0) {
-          rows.forEach(row => {
-            resultados.push({
-              ...row,
-              emoji: tabla.emoji,
-              tabla: tabla.nombre
-            });
-          });
-        }
-        
-        tablasPendientes--;
-        if (tablasPendientes === 0) {
-          if (resultados.length > 0) {
-            let respuesta = `${emojis.confirmacion} *SÍ, tenemos*\n━━━━━━━━━━━━━━━━━━━━━\n`;
-            resultados.forEach(r => {
-              if (r.precio) {
-                respuesta += `${r.emoji} ${r.nombre} $${r.precio}\n`;
-              } else {
-                respuesta += `${r.emoji} ${r.nombre}\n`;
-              }
-            });
-            respuesta += `━━━━━━━━━━━━━━━━━━━━━\n🕒 ${config.horario}\n📍 ${config.direccion}`;
-            resolve(respuesta);
-          } else {
-            // Buscar en negado (si preguntó por algo que no hay)
-            tablas.forEach(tabla => {
-              db.all(`SELECT nombre FROM ${tabla.nombre} WHERE nombre LIKE ?`, [`%${nombreBuscar}%`], (err, rows) => {
-                if (rows && rows.length > 0) {
-                  resultados.push({
-                    nombre: rows[0].nombre,
-                    emoji: tabla.emoji
-                  });
-                }
-              });
-            });
-            
-            setTimeout(() => {
-              if (resultados.length > 0) {
-                resolve(`${emojis.negacion} *LO SENTIMOS*\n━━━━━━━━━━━━━━━━━━━━━\n${resultados[0].emoji} *${resultados[0].nombre}* ya se terminó.\n━━━━━━━━━━━━━━━━━━━━━`);
-              } else {
-                resolve(null);
-              }
-            }, 500);
-          }
-        }
-      });
-    });
-  });
-}
-
-// ====================================
-// MANEJADOR DE DOMICILIO (REENVÍO)
-// ====================================
 
 async function manejarSolicitudDomicilio(numeroCliente, sock) {
   return new Promise((resolve) => {
@@ -668,26 +510,9 @@ async function manejarSolicitudDomicilio(numeroCliente, sock) {
       const fecha = new Date();
       const hora = `${fecha.getHours()}:${fecha.getMinutes().toString().padStart(2, '0')}`;
       
-      const mensajeReenvio = `
-🚚 *SOLICITUD DE DOMICILIO*
-━━━━━━━━━━━━━━━━━━━━━
+      const mensajeReenvio = `🚚 *SOLICITUD DE DOMICILIO*\n━━━━━━━━━━━━━━━━━━━━━\n\n👤 Cliente: *${numeroMostrar}*\n🕒 Hora: ${hora}\n━━━━━━━━━━━━━━━━━━━━━\n✅ Solicitó ser contactado\n\n📞 *Llama ahora:*\n${numeroMostrar}\n━━━━━━━━━━━━━━━━━━━━━\nToma su pedido por teléfono.`;
 
-👤 Cliente: *${numeroMostrar}*
-🕒 Hora: ${hora}
-
-━━━━━━━━━━━━━━━━━━━━━
-✅ Solicitó ser contactado
-
-📞 *Llama ahora:*
-${numeroMostrar}
-━━━━━━━━━━━━━━━━━━━━━
-
-Toma su pedido por teléfono.`;
-
-      // Guardar en base de datos
       db.run('INSERT INTO solicitudes_domicilio (numero_cliente) VALUES (?)', [numeroMostrar]);
-      
-      // Enviar mensaje (el número ya tiene 521 para el reenvío)
       sock.sendMessage(numeroReenvio, { text: mensajeReenvio });
       resolve();
     });
@@ -703,23 +528,16 @@ async function conectarWhatsApp() {
   
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: false,
     browser: ['ComiVoz', 'Safari', '1.0.0']
   });
 
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    
-    if (qr) {
-      console.log('QR recibido (no se usará, solo código de emparejamiento)');
-    }
+    const { connection } = update;
     
     if (connection === 'open') {
       console.log('✅ WhatsApp CONECTADO');
-      console.log(`🤖 Bot listo para recibir mensajes`);
-      console.log(`📱 Dueña: ${config.numero_duena}`);
     }
     
     if (connection === 'close') {
@@ -733,80 +551,52 @@ async function conectarWhatsApp() {
     if (!m.message) return;
     
     const remitente = m.key.remoteJid;
-    const esGrupo = remitente.endsWith('@g.us');
-    if (esGrupo) return; // Ignorar grupos
+    if (remitente.endsWith('@g.us')) return;
     
     const numeroLimpio = formatearNumeroMostrar(remitente);
     const esDuena = (numeroLimpio === formatearNumeroMostrar(config.numero_duena));
     
-    // PROCESAR AUDIOS (solo de la dueña)
+    // Audios de la dueña
     if (m.message.audioMessage && esDuena) {
-      console.log(`🎤 Audio recibido de dueña: ${numeroLimpio}`);
+      console.log(`🎤 Audio recibido de dueña`);
       
-      // Descargar audio
       const buffer = await m.message.audioMessage.download();
       const audioPath = `/tmp/audio_${Date.now()}.ogg`;
       fs.writeFileSync(audioPath, buffer);
       
-      // Procesar con Vosk
       const texto = await procesarAudio(audioPath);
       console.log(`📝 Transcripción: ${texto}`);
       
-      // Interpretar instrucción
       const respuesta = await interpretarInstruccion(texto, remitente);
+      if (respuesta) await sock.sendMessage(remitente, { text: respuesta });
       
-      if (respuesta) {
-        await sock.sendMessage(remitente, { text: respuesta });
-      }
-      
-      // Limpiar
       fs.unlinkSync(audioPath);
       return;
     }
     
-    // PROCESAR TEXTOS (clientes)
+    // Textos de clientes
     if (m.message.conversation) {
       const texto = m.message.conversation;
       console.log(`💬 Mensaje de ${numeroLimpio}: ${texto}`);
       
-      // Detectar intención
-      const intencion = detectarIntencion(texto);
-      
-      // Verificar si es respuesta a domicilio (SÍ/NO)
       if (texto.toLowerCase() === 'sí' || texto.toLowerCase() === 'si') {
-        // Verificar si hay una solicitud de domicilio pendiente
         db.get('SELECT activo FROM domicilio_config WHERE id = 1 AND activo = 1', [], async (err, row) => {
           if (row && row.activo === 1) {
-            // Enviar confirmación al cliente
-            await sock.sendMessage(remitente, { text: '👍 Gracias. En unos minutos te llamaremos para tomar tu pedido.' });
-            
-            // Reenviar a la dueña
+            await sock.sendMessage(remitente, { text: '👍 Gracias. En unos minutos te llamaremos.' });
             await manejarSolicitudDomicilio(remitente, sock);
           }
         });
         return;
       }
       
-      // Generar respuesta según intención
+      const intencion = detectarIntencion(texto);
       const respuesta = await generarRespuesta(intencion, texto);
       
       if (respuesta) {
-        // Si la respuesta es muy larga, dividir en múltiples mensajes
         if (respuesta.length > 1500) {
           const partes = respuesta.split('\n\n');
-          let mensajeActual = '';
-          
           for (const parte of partes) {
-            if ((mensajeActual + parte).length > 1500) {
-              await sock.sendMessage(remitente, { text: mensajeActual });
-              mensajeActual = parte;
-            } else {
-              mensajeActual += (mensajeActual ? '\n\n' : '') + parte;
-            }
-          }
-          
-          if (mensajeActual) {
-            await sock.sendMessage(remitente, { text: mensajeActual });
+            await sock.sendMessage(remitente, { text: parte });
           }
         } else {
           await sock.sendMessage(remitente, { text: respuesta });
@@ -819,7 +609,7 @@ async function conectarWhatsApp() {
 }
 
 // ====================================
-// INICIAR BOT
+// INICIAR
 // ====================================
 
 console.log('====================================');
