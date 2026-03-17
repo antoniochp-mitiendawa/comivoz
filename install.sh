@@ -5,9 +5,6 @@
 # Un solo comando, todo listo
 # ====================================
 
-# Convertir a formato Unix por si acaso
-sed -i 's/\r$//' "$0"
-
 clear
 echo "===================================="
 echo "  COMIVOZ - INSTALACIÓN AUTOMÁTICA"
@@ -17,11 +14,12 @@ echo ""
 
 # PASO 1: Actualizar Termux
 echo "[1/9] Actualizando Termux..."
-pkg update -y && pkg upgrade -y
+pkg update -y
+pkg upgrade -y
 
 # PASO 2: Instalar paquetes necesarios
 echo "[2/9] Instalando paquetes necesarios..."
-pkg install -y nodejs-lts ffmpeg git sqlite wget curl unzip
+pkg install -y nodejs ffmpeg git wget
 
 # PASO 3: Crear carpetas del proyecto
 echo "[3/9] Creando estructura de carpetas..."
@@ -29,14 +27,13 @@ mkdir -p comivoz
 cd comivoz
 mkdir -p database
 mkdir -p models
-mkdir -p logs
 mkdir -p auth_info
 
 # PASO 4: Descargar modelo Vosk (español - 40MB)
 echo "[4/9] Descargando modelo de voz Vosk español (40MB)..."
 cd models
-wget -q --show-progress https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
-unzip -q vosk-model-small-es-0.42.zip
+wget https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+unzip vosk-model-small-es-0.42.zip
 rm vosk-model-small-es-0.42.zip
 mv vosk-model-small-es-0.42 vosk-model
 cd ..
@@ -64,11 +61,16 @@ npm install
 echo "[6/9] Configuración inicial (solo una vez)"
 echo "----------------------------------------"
 echo ""
-read -p "📱 Número de la dueña (10 dígitos, ej: 5512345678): " NUMERO_DUENA
-read -p "🤖 Número del bot (10 dígitos, ej: 5512345678): " NUMERO_BOT
-read -p "🏠 Nombre del negocio (ej: Lupita Comidas): " NOMBRE_NEGOCIO
-read -p "📍 Dirección (ej: Av. Principal #123): " DIRECCION
-read -p "🕒 Horario (ej: 8am a 5pm): " HORARIO
+echo -n "📱 Número de la dueña (10 dígitos, ej: 5512345678): "
+read NUMERO_DUENA
+echo -n "🤖 Número del bot (10 dígitos, ej: 5512345678): "
+read NUMERO_BOT
+echo -n "🏠 Nombre del negocio (ej: Lupita Comidas): "
+read NOMBRE_NEGOCIO
+echo -n "📍 Dirección (ej: Av. Principal #123): "
+read DIRECCION
+echo -n "🕒 Horario (ej: 8am a 5pm): "
+read HORARIO
 echo ""
 
 # PASO 7: Guardar configuración
