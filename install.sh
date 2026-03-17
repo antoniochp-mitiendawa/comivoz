@@ -81,7 +81,6 @@ esperar_usuario
 # =============================================
 clear
 mensaje_titulo "PASO 1/12 - ACTUALIZANDO TERMUX"
-# Verificación independiente: Si ya se actualizó recientemente, podemos saltar o agilizar
 mensaje "Actualizando repositorios y paquetes básicos..."
 pkg update -y && pkg upgrade -y
 verificar_paso "Termux actualizado correctamente" "Error al actualizar Termux" "Paso 1 - Actualización"
@@ -93,7 +92,6 @@ clear
 mensaje_titulo "PASO 2/12 - INSTALANDO DEPENDENCIAS BASE"
 mensaje "Instalando paquetes esenciales..."
 
-# Verificación independiente: Solo instala si no están presentes
 pkg install -y \
     nodejs \
     python \
@@ -124,13 +122,23 @@ mensaje_titulo "PASO 3/12 - CREANDO DIRECTORIO DEL PROYECTO"
 cd ~
 if [ -d "comidabot" ];
 then
-    mensaje_ok "El directorio comidabot ya existe, omitiendo creación."
+    mensaje_advertencia "El directorio comidabot ya existe. ¿Deseas eliminarlo? (s/n)"
+    read -n 1 -r < /dev/tty
+    echo ""
+    if [[ $REPLY =~ ^[Ss]$ ]];
+    then
+        rm -rf comidabot
+        mensaje "Directorio eliminado"
+        mkdir -p ~/comidabot
+    else
+        mensaje "Manteniendo directorio existente..."
+    fi
 else
     mkdir -p ~/comidabot
-    mensaje_ok "Directorio creado en ~/comidabot"
 fi
+
 cd ~/comidabot
-verificar_paso "Acceso al directorio del proyecto" "Error al acceder al directorio" "Paso 3 - Directorio"
+verificar_paso "Directorio listo en ~/comidabot" "Error al acceder al directorio" "Paso 3 - Directorio"
 
 # =============================================
 # PASO 4: Instalar Whisper.cpp
@@ -138,24 +146,28 @@ verificar_paso "Acceso al directorio del proyecto" "Error al acceder al director
 clear
 mensaje_titulo "PASO 4/12 - INSTALANDO WHISPER.CPP (RECONOCIMIENTO DE VOZ)"
 
-if [ -f "whisper.cpp/main" ]; then
-    mensaje_ok "Whisper.cpp ya está compilado, omitiendo paso."
+if [ -d "whisper.cpp" ]; then
+    mensaje "El repositorio ya existe, accediendo..."
+    cd whisper.cpp
 else
     mensaje "Clonando repositorio de Whisper.cpp..."
     git clone https://github.com/ggerganov/whisper.cpp.git
     verificar_paso "Repositorio clonado" "Error al clonar Whisper.cpp" "Paso 4 - Git clone"
-
     cd whisper.cpp
-    mensaje "Compilando Whisper.cpp (esto puede tomar varios minutos)..."
-    make -j4
-    verificar_paso "Compilación completada" "Error al compilar Whisper.cpp" "Paso 4 - Compilación"
+fi
 
+mensaje "Compilando Whisper.cpp (esto puede tomar varios minutos)..."
+make -j4
+verificar_paso "Compilación completada" "Error al compilar Whisper.cpp" "Paso 4 - Compilación"
+
+if [ ! -f "models/ggml-tiny.bin" ]; then
     mensaje "Descargando modelo TINY (75MB - el más liviano)..."
     bash ./models/download-ggml-model.sh tiny
     verificar_paso "Modelo TINY descargado" "Error al descargar modelo TINY" "Paso 4 - Descarga modelo"
-    cd ~/comidabot
 fi
-mensaje_ok "Whisper.cpp configurado correctamente"
+
+cd ~/comidabot
+mensaje_ok "Whisper.cpp instalado correctamente"
 
 # =============================================
 # PASO 5: Inicializar proyecto Node.js
@@ -164,12 +176,8 @@ clear
 mensaje_titulo "PASO 5/12 - INICIALIZANDO PROYECTO NODE.JS"
 
 cd ~/comidabot
-if [ -f "package.json" ]; then
-    mensaje_ok "package.json ya existe."
-else
+if [ ! -f "package.json" ]; then
     npm init -y
-    verificar_paso "package.json creado" "Error al crear package.json" "Paso 5 - npm init"
-
     # Modificar package.json para tipo módulo
     cat > package.json << 'EOF'
 {
@@ -188,7 +196,7 @@ else
 }
 EOF
 fi
-mensaje_ok "package.json configurado"
+verificar_paso "package.json configurado" "Error al configurar package.json" "Paso 5 - npm init"
 
 # =============================================
 # PASO 6: Instalar dependencias de Node.js
@@ -196,13 +204,9 @@ mensaje_ok "package.json configurado"
 clear
 mensaje_titulo "PASO 6/12 - INSTALANDO DEPENDENCIAS NODE.JS"
 
-if [ -d "node_modules" ]; then
-    mensaje_ok "Las dependencias de Node.js ya están instaladas."
-else
-    mensaje "Instalando paquetes npm (esto puede tomar varios minutos)..."
-    npm install @whiskeysockets/baileys pino sqlite3 node-fetch fluent-ffmpeg qrcode-terminal audio-decode
-    verificar_paso "Dependencias npm instaladas" "Error al instalar dependencias npm" "Paso 6 - npm install"
-fi
+mensaje "Instalando paquetes npm (esto puede tomar varios minutos)..."
+npm install @whiskeysockets/baileys pino sqlite3 node-fetch fluent-ffmpeg qrcode-terminal audio-decode
+verificar_paso "Dependencias npm instaladas" "Error al instalar dependencias npm" "Paso 6 - npm install"
 
 # =============================================
 # PASO 7: Crear estructura de directorios
@@ -212,7 +216,7 @@ mensaje_titulo "PASO 7/12 - CREANDO ESTRUCTURA DE DIRECTORIOS"
 
 cd ~/comidabot
 mkdir -p src src/baileys src/whisper src/database src/spintax src/utils auth_info logs audios
-verificar_paso "Estructura de directorios lista" "Error al crear directorios" "Paso 7 - Directorios"
+verificar_paso "Estructura de directorios creada" "Error al crear directorios" "Paso 7 - Directorios"
 
 # =============================================
 # PASO 8: Crear base de datos SQLite
@@ -220,11 +224,9 @@ verificar_paso "Estructura de directorios lista" "Error al crear directorios" "P
 clear
 mensaje_titulo "PASO 8/12 - CREANDO BASE DE DATOS"
 
-if [ -f "comidabot.db" ]; then
-    mensaje_ok "La base de datos ya existe."
-else
-    cd ~/comidabot
-    cat > crear_bd.sql << 'EOF'
+cd ~/comidabot
+if [ ! -f "comidabot.db" ]; then
+cat > crear_bd.sql << 'EOF'
 -- Negocio
 CREATE TABLE IF NOT EXISTS negocio (
     id INTEGER PRIMARY KEY DEFAULT 1,
@@ -321,9 +323,9 @@ INSERT INTO spintax (categoria, variante) VALUES
 ('confirmacion_si', '{Sí|Está bien|Ok|Perfecto|Dale|Sale}'),
 ('confirmacion_no', '{No|Nel|No gracias|Mejor no}');
 EOF
-    sqlite3 comidabot.db < crear_bd.sql
-    verificar_paso "Base de datos creada" "Error en base de datos" "Paso 8"
+sqlite3 comidabot.db < crear_bd.sql
 fi
+verificar_paso "Base de datos lista" "Error al crear base de datos" "Paso 8 - Base de datos"
 
 # =============================================
 # PASO 9: Crear script de configuración inicial
@@ -333,7 +335,7 @@ mensaje_titulo "PASO 9/12 - CONFIGURACIÓN INICIAL"
 
 cd ~/comidabot
 if [ ! -f "config.json" ]; then
-    cat > config.json << 'EOF'
+cat > config.json << 'EOF'
 {
     "numero_bot": "",
     "numero_dueño": "",
@@ -347,7 +349,7 @@ if [ ! -f "config.json" ]; then
 }
 EOF
 fi
-mensaje_ok "Archivo config.json listo"
+mensaje_ok "Archivo config.json creado"
 
 # =============================================
 # PASO 10: Solicitar números y emparejamiento
@@ -355,7 +357,6 @@ mensaje_ok "Archivo config.json listo"
 clear
 mensaje_titulo "PASO 10/12 - CONFIGURACIÓN DE NÚMEROS"
 
-# Limpieza de búfer y bucle de espera física
 NUMERO_BOT=""
 while [ -z "$NUMERO_BOT" ]; do
     echo ""
@@ -365,7 +366,7 @@ while [ -z "$NUMERO_BOT" ]; do
     echo -n "> "
     read NUMERO_BOT < /dev/tty
     if [ -z "$NUMERO_BOT" ]; then
-        mensaje_error "El número del bot es obligatorio para continuar"
+        mensaje_error "El número del bot es obligatorio"
     fi
 done
 
@@ -377,15 +378,15 @@ while [ -z "$NUMERO_DUENO" ]; do
     echo -n "> "
     read NUMERO_DUENO < /dev/tty
     if [ -z "$NUMERO_DUENO" ]; then
-        mensaje_error "El número del dueño es obligatorio para continuar"
+        mensaje_error "El número del dueño es obligatorio"
     fi
 done
 
-# Guardar números en config.json respetando tu sed original
+# Guardar números en config.json
 sed -i "s/\"numero_bot\": \"\"/\"numero_bot\": \"$NUMERO_BOT\"/" config.json
 sed -i "s/\"numero_dueño\": \"\"/\"numero_dueño\": \"$NUMERO_DUENO\"/" config.json
 
-# Insertar número de dueño en base de datos
+# Insertar número de dueño en base de datos como autorizado
 sqlite3 comidabot.db "INSERT OR IGNORE INTO autorizados (numero, rol) VALUES ('$NUMERO_DUENO', 'dueño');"
 mensaje_ok "Números guardados correctamente"
 
@@ -438,17 +439,13 @@ async function emparejar() {
             console.log('\x1b[32m%s\x1b[0m', '✅ ¡EMPAREJAMIENTO EXITOSO!');
             process.exit(0);
         } else if (connection === 'close') {
-            console.log('\x1b[31m%s\x1b[0m', '❌ La conexión se cerró');
             process.exit(1);
         }
     });
 }
-emparejar().catch(err => {
-    console.error('Error:', err);
-    process.exit(1);
-});
+emparejar().catch(err => process.exit(1));
 EOF
-mensaje_ok "Script de emparejamiento listo"
+mensaje_ok "Script de emparejamiento creado"
 
 # =============================================
 # PASO 12: Crear script principal del bot
@@ -463,9 +460,6 @@ import { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'fs';
 import sqlite3 from 'sqlite3';
-import { exec } from 'child_process';
-import { fileURLToPath } from 'url';
-import path from 'path';
 
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const db = new sqlite3.Database(config.db_path);
