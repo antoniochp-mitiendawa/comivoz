@@ -2,7 +2,7 @@
 
 # =============================================
 # INSTALADOR DE COMIDABOT PARA TERMUX
-# Versión: 1.1 (Corrección de Dependencias)
+# Versión: 1.0
 # =============================================
 
 # Colores para mensajes
@@ -62,12 +62,12 @@ esperar_usuario() {
 clear
 mensaje_titulo "COMIDABOT - INSTALACIÓN EN TERMUX"
 echo ""
-echo -e "${BLANCO}Este instalador configurará todo lo necesario para:${NC}"
-echo -e "  ${VERDE}•${NC} WhatsApp Bot con Baileys [cite: 3]"
-echo -e "  ${VERDE}•${NC} Whisper.cpp para reconocimiento de voz [cite: 3]"
-echo -e "  ${VERDE}•${NC} Base de datos SQLite [cite: 3]"
-echo -e "  ${VERDE}•${NC} Sistema de menús diarios [cite: 3]"
-echo -e "  ${VERDE}•${NC} Respuestas automáticas con spintax [cite: 3]"
+echo -e "${BLANCO}Este instalador configurará todo lo necesario para:${NC}" [cite: 3]
+echo -e "  ${VERDE}•${NC} WhatsApp Bot con Baileys"
+echo -e "  ${VERDE}•${NC} Whisper.cpp para reconocimiento de voz"
+echo -e "  ${VERDE}•${NC} Base de datos SQLite"
+echo -e "  ${VERDE}•${NC} Sistema de menús diarios"
+echo -e "  ${VERDE}•${NC} Respuestas automáticas con spintax"
 echo ""
 echo -e "${AMARILLO}⚠️  IMPORTANTE:${NC}"
 echo -e "  • Asegúrate de tener buena conexión a internet"
@@ -82,7 +82,6 @@ esperar_usuario
 clear
 mensaje_titulo "PASO 1/12 - ACTUALIZANDO TERMUX"
 mensaje "Actualizando repositorios y paquetes básicos..."
-# Forzamos la no-interactividad para evitar bloqueos en el upgrade
 export DEBIAN_FRONTEND=noninteractive
 pkg update -y && pkg upgrade -y -o Dpkg::Options::="--force-confold" [cite: 4]
 verificar_paso "Termux actualizado correctamente" "Error al actualizar Termux" "Paso 1 - Actualización"
@@ -106,9 +105,14 @@ pkg install -y \
     imagemagick \
     openssl \
     sqlite \
-    nano [cite: 5]
+    nano
 
-verificar_paso "Dependencias base instaladas" "Error al instalar dependencias base" "Paso 2 - Dependencias base"
+verificar_paso "Dependencias base instaladas" "Error al instalar dependencias base" "Paso 2 - Dependencias base" [cite: 5]
+
+# Verificar versiones instaladas
+mensaje "Node.js: $(node --version)"
+mensaje "npm: $(npm --version)"
+mensaje "Python: $(python --version 2>&1)"
 
 # =============================================
 # PASO 3: Crear directorio del proyecto
@@ -118,8 +122,16 @@ mensaje_titulo "PASO 3/12 - CREANDO DIRECTORIO DEL PROYECTO"
 
 cd ~
 if [ -d "comidabot" ]; then [cite: 6]
-    rm -rf comidabot [cite: 7]
-    mensaje "Directorio anterior eliminado para instalación limpia"
+    mensaje_advertencia "El directorio comidabot ya existe. ¿Deseas eliminarlo? (s/n)"
+    read -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Ss]$ ]]; then [cite: 7]
+        rm -rf comidabot
+        mensaje "Directorio eliminado"
+    else
+        mensaje_error "No se puede continuar con un directorio existente"
+        exit 1
+    fi
 fi
 
 mkdir -p ~/comidabot
@@ -130,21 +142,24 @@ verificar_paso "Directorio creado en ~/comidabot" "Error al crear directorio" "P
 # PASO 4: Instalar Whisper.cpp
 # =============================================
 clear
-mensaje_titulo "PASO 4/12 - INSTALANDO WHISPER.CPP"
+mensaje_titulo "PASO 4/12 - INSTALANDO WHISPER.CPP (RECONOCIMIENTO DE VOZ)"
 
 mensaje "Clonando repositorio de Whisper.cpp..."
 git clone https://github.com/ggerganov/whisper.cpp.git
+verificar_paso "Repositorio clonado" "Error al clonar Whisper.cpp" "Paso 4 - Git clone"
+
 cd whisper.cpp [cite: 8]
 
 mensaje "Compilando Whisper.cpp (esto puede tomar varios minutos)..."
 make -j4
 verificar_paso "Compilación completada" "Error al compilar Whisper.cpp" "Paso 4 - Compilación"
 
-mensaje "Descargando modelo TINY..."
+mensaje "Descargando modelo TINY (75MB - el más liviano)..."
 bash ./models/download-ggml-model.sh tiny
 verificar_paso "Modelo TINY descargado" "Error al descargar modelo TINY" "Paso 4 - Descarga modelo"
 
 cd ~/comidabot
+mensaje_ok "Whisper.cpp instalado correctamente"
 
 # =============================================
 # PASO 5: Inicializar proyecto Node.js
@@ -152,23 +167,29 @@ cd ~/comidabot
 clear
 mensaje_titulo "PASO 5/12 - INICIALIZANDO PROYECTO NODE.JS"
 
+cd ~/comidabot
+npm init -y
+verificar_paso "package.json creado" "Error al crear package.json" "Paso 5 - npm init"
+
+# Modificar package.json para tipo módulo (necesario para Baileys)
 cat > package.json << 'EOF'
 {
   "name": "comidabot",
   "version": "1.0.0",
   "description": "Bot de WhatsApp para comidas corridas",
-  "main": "bot.js",
+  "main": "bot.js", [cite: 9]
   "type": "module",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["whatsapp", "bot", "comidas"],
   "author": "",
   "license": "ISC"
 }
 EOF
-[cite: 9]
-verificar_paso "package.json configurado" "Error al crear package.json" "Paso 5 - npm init"
+
+mensaje_ok "package.json configurado con type: module"
 
 # =============================================
 # PASO 6: Instalar dependencias de Node.js
@@ -178,18 +199,30 @@ mensaje_titulo "PASO 6/12 - INSTALANDO DEPENDENCIAS NODE.JS"
 
 mensaje "Instalando paquetes npm (Solución para Termux)..."
 
-# Instalamos las dependencias evitando scripts de compilación nativa que fallan
-npm install @whiskeysockets/baileys pino node-fetch fluent-ffmpeg qrcode-terminal audio-decode --ignore-scripts [cite: 10]
-
-# Instalamos sqlite3 forzando que no intente compilar si no es necesario o usamos la precompilada
+# Instalación optimizada para evitar errores de compilación gyp en Android
+npm install @whiskeysockets/baileys pino node-fetch fluent-ffmpeg qrcode-terminal audio-decode --ignore-scripts
+# Instalación de sqlite3 forzando el binario precompilado
 npm install sqlite3 --save --build-from-source=false
 
-verificar_paso "Dependencias npm instaladas" "Error al instalar dependencias npm" "Paso 6 - npm install"
+verificar_paso "Dependencias npm instaladas" "Error al instalar dependencias npm" "Paso 6 - npm install" [cite: 10]
 
 # =============================================
 # PASO 7: Crear estructura de directorios
 # =============================================
-mkdir -p src/baileys src/whisper src/database src/spintax src/utils auth_info logs audios
+clear
+mensaje_titulo "PASO 7/12 - CREANDO ESTRUCTURA DE DIRECTORIOS"
+
+cd ~/comidabot
+mkdir -p src
+mkdir -p src/baileys
+mkdir -p src/whisper
+mkdir -p src/database
+mkdir -p src/spintax
+mkdir -p src/utils
+mkdir -p auth_info
+mkdir -p logs
+mkdir -p audios
+
 verificar_paso "Estructura de directorios creada" "Error al crear directorios" "Paso 7 - Directorios"
 
 # =============================================
@@ -198,19 +231,103 @@ verificar_paso "Estructura de directorios creada" "Error al crear directorios" "
 clear
 mensaje_titulo "PASO 8/12 - CREANDO BASE DE DATOS"
 
-cat > crear_bd.sql << 'EOF'
-CREATE TABLE IF NOT EXISTS negocio (id INTEGER PRIMARY KEY DEFAULT 1, nombre TEXT DEFAULT 'Mi Restaurante', telefono TEXT, slogan TEXT, direccion TEXT); [cite: 11]
-CREATE TABLE IF NOT EXISTS horarios (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT, dia_inicio TEXT, dia_fin TEXT, hora_apertura TEXT, hora_cierre TEXT, activo BOOLEAN DEFAULT 1); [cite: 12]
-CREATE TABLE IF NOT EXISTS domicilio (id INTEGER PRIMARY KEY AUTOINCREMENT, activo BOOLEAN DEFAULT 0, telefono_contacto TEXT, horario TEXT); [cite: 13]
-CREATE TABLE IF NOT EXISTS avisos_pedidos (id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, nombre TEXT, activo BOOLEAN DEFAULT 1, ultimo_aviso DATETIME, orden INTEGER DEFAULT 0); [cite: 14]
-CREATE TABLE IF NOT EXISTS menu_desayunos (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha DATE, platillo TEXT, precio INTEGER, incluye TEXT DEFAULT 'Café o té + fruta', disponible BOOLEAN DEFAULT 1); [cite: 15]
-CREATE TABLE IF NOT EXISTS menu_comida_tiempos (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha DATE, tiempo INTEGER, nombre_tiempo TEXT, opciones TEXT, incluye TEXT, precio_total INTEGER, disponible BOOLEAN DEFAULT 1); [cite: 16]
-CREATE TABLE IF NOT EXISTS autorizados (id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, rol TEXT DEFAULT 'dueño', activo BOOLEAN DEFAULT 1); [cite: 17]
-CREATE TABLE IF NOT EXISTS spintax (id INTEGER PRIMARY KEY AUTOINCREMENT, categoria TEXT, variante TEXT); [cite: 18]
-CREATE TABLE IF NOT EXISTS conversaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, numero_cliente TEXT, fecha DATE, ultimo_mensaje DATETIME, variaciones_usadas TEXT); [cite: 19]
-CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, tipo TEXT, mensaje TEXT); [cite: 20]
+cd ~/comidabot
 
-INSERT OR IGNORE INTO spintax (categoria, variante) VALUES 
+cat > crear_bd.sql << 'EOF'
+-- Negocio
+CREATE TABLE IF NOT EXISTS negocio (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    nombre TEXT DEFAULT 'Mi Restaurante',
+    telefono TEXT,
+    slogan TEXT, [cite: 11]
+    direccion TEXT
+);
+
+-- Horarios
+CREATE TABLE IF NOT EXISTS horarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT,
+    dia_inicio TEXT,
+    dia_fin TEXT,
+    hora_apertura TEXT,
+    hora_cierre TEXT,
+    activo BOOLEAN DEFAULT 1
+); [cite: 12]
+
+-- Domicilio
+CREATE TABLE IF NOT EXISTS domicilio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    activo BOOLEAN DEFAULT 0,
+    telefono_contacto TEXT,
+    horario TEXT
+); [cite: 13]
+
+-- Números para avisos
+CREATE TABLE IF NOT EXISTS avisos_pedidos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE,
+    nombre TEXT,
+    activo BOOLEAN DEFAULT 1,
+    ultimo_aviso DATETIME,
+    orden INTEGER DEFAULT 0
+); [cite: 14]
+
+-- Desayunos diarios
+CREATE TABLE IF NOT EXISTS menu_desayunos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha DATE,
+    platillo TEXT,
+    precio INTEGER,
+    incluye TEXT DEFAULT 'Café o té + fruta',
+    disponible BOOLEAN DEFAULT 1
+); [cite: 15]
+
+-- Comida corrida por tiempos
+CREATE TABLE IF NOT EXISTS menu_comida_tiempos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha DATE,
+    tiempo INTEGER,
+    nombre_tiempo TEXT,
+    opciones TEXT,
+    incluye TEXT,
+    precio_total INTEGER,
+    disponible BOOLEAN DEFAULT 1
+); [cite: 16]
+
+-- Números autorizados
+CREATE TABLE IF NOT EXISTS autorizados (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE,
+    rol TEXT DEFAULT 'dueño',
+    activo BOOLEAN DEFAULT 1
+); [cite: 17]
+
+-- Spintax (variaciones)
+CREATE TABLE IF NOT EXISTS spintax (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    categoria TEXT,
+    variante TEXT
+); [cite: 18]
+
+-- Conversaciones
+CREATE TABLE IF NOT EXISTS conversaciones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero_cliente TEXT,
+    fecha DATE,
+    ultimo_mensaje DATETIME,
+    variaciones_usadas TEXT
+); [cite: 19]
+
+-- Logs
+CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    tipo TEXT,
+    mensaje TEXT
+); [cite: 20]
+
+-- Insertar spintax inicial
+INSERT INTO spintax (categoria, variante) VALUES 
 ('saludo', '{☀️|🌅|🙌|🌞|🌤️} {BUENOS DÍAS|BUEN DÍA|Muy buenos días|QUÉ TAL}'),
 ('saludo_tarde', '{🌤️|☀️|🌞} {BUENAS TARDES|BUENA TARDE|QUÉ TAL}'),
 ('saludo_noche', '{🌙|✨|🌆} {BUENAS NOCHES|BUENA NOCHE}'),
@@ -221,27 +338,24 @@ INSERT OR IGNORE INTO spintax (categoria, variante) VALUES
 ('incluye', '{Incluye:|Todo incluye:|Acompañado de:}'),
 ('espera', '{un momentito|espera|solo un segundo|ahora sigo|continuamos}'),
 ('confirmacion_si', '{Sí|Está bien|Ok|Perfecto|Dale|Sale}'),
-('confirmacion_no', '{No|Nel|No gracias|Mejor no}'); [cite: 21]
-EOF
+('confirmacion_no', '{No|Nel|No gracias|Mejor no}');
+EOF [cite: 21]
 
 sqlite3 comidabot.db < crear_bd.sql
-verificar_paso "Base de datos creada" "Error en la DB" "Paso 8"
+verificar_paso "Base de datos creada correctamente" "Error al crear base de datos" "Paso 8 - Base de datos"
 
 # =============================================
-# PASO 10: Configuración de Números
+# PASO 9: Crear script de configuración inicial
 # =============================================
 clear
-mensaje_titulo "PASO 10/12 - CONFIGURACIÓN DE NÚMEROS" [cite: 22]
+mensaje_titulo "PASO 9/12 - CONFIGURACIÓN INICIAL"
 
-echo -e "${BLANCO}Ingresa el número del BOT (ej: 5215512345678):${NC}"
-read NUMERO_BOT [cite: 23]
-echo -e "${BLANCO}Ingresa el número del DUEÑO:${NC}"
-read NUMERO_DUENO [cite: 24]
+cd ~/comidabot
 
-cat > config.json << EOF
+cat > config.json << 'EOF'
 {
-    "numero_bot": "$NUMERO_BOT",
-    "numero_dueño": "$NUMERO_DUENO",
+    "numero_bot": "",
+    "numero_dueño": "",
     "whisper_path": "./whisper.cpp/main",
     "whisper_model": "./whisper.cpp/models/ggml-tiny.bin",
     "delay_min": 5,
@@ -252,84 +366,206 @@ cat > config.json << EOF
 }
 EOF
 
-sqlite3 comidabot.db "INSERT OR IGNORE INTO autorizados (numero, rol) VALUES ('$NUMERO_DUENO', 'dueño');" [cite: 25]
+mensaje_ok "Archivo config.json creado"
 
 # =============================================
-# PASO 11: Script de Emparejamiento
+# PASO 10: Solicitar números y emparejamiento
 # =============================================
+clear
+mensaje_titulo "PASO 10/12 - CONFIGURACIÓN DE NÚMEROS" [cite: 22]
+
+echo ""
+echo -e "${BLANCO}Ingresa el número del BOT (el que atenderá clientes)${NC}"
+echo -e "Formato: 5215512345678 (código de país + número sin espacios)"
+echo -e "${AMARILLO}Ejemplo: 5215551234567${NC}"
+echo -n "> "
+read NUMERO_BOT
+
+if [ -z "$NUMERO_BOT" ]; then [cite: 23]
+    mensaje_error "El número del bot es obligatorio"
+    exit 1
+fi
+
+echo ""
+echo -e "${BLANCO}Ingresa el número del DUEÑO (el que dará instrucciones)${NC}"
+echo -e "Formato: 5215512345678"
+echo -n "> "
+read NUMERO_DUENO
+
+if [ -z "$NUMERO_DUENO" ]; then [cite: 24]
+    mensaje_error "El número del dueño es obligatorio"
+    exit 1
+fi
+
+# Guardar números en config.json
+sed -i "s/\"numero_bot\": \"\"/\"numero_bot\": \"$NUMERO_BOT\"/" config.json
+sed -i "s/\"numero_dueño\": \"\"/\"numero_dueño\": \"$NUMERO_DUENO\"/" config.json
+
+# Insertar número de dueño en base de datos como autorizado
+sqlite3 comidabot.db "INSERT OR IGNORE INTO autorizados (numero, rol) VALUES ('$NUMERO_DUENO', 'dueño');"
+mensaje_ok "Números guardados correctamente" [cite: 25]
+
+# =============================================
+# PASO 11: Crear script de emparejamiento
+# =============================================
+clear
+mensaje_titulo "PASO 11/12 - PREPARANDO EMPAREJAMIENTO WHATSAPP"
+
+cd ~/comidabot
+
 cat > emparejar.js << 'EOF'
 import makeWASocket from '@whiskeysockets/baileys'; [cite: 26]
-import { useMultiFileAuthState } from '@whiskeysockets/baileys'; [cite: 27]
+import { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'fs';
 
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8')); [cite: 28]
+// Leer configuración [cite: 27]
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const numeroBot = config.numero_bot;
 
 async function emparejar() {
+    console.log('\x1b[36m%s\x1b[0m', '========================================='); [cite: 28]
+    console.log('\x1b[35m%s\x1b[0m', 'EMPAREJAMIENTO DE WHATSAPP BOT');
+    console.log('\x1b[36m%s\x1b[0m', '=========================================');
+    console.log(`Número del Bot: ${numeroBot}\n`);
+
     const { state, saveCreds } = await useMultiFileAuthState('auth_info'); [cite: 29]
     const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, [cite: 30]
+        printQRInTerminal: false, // No usaremos QR
     });
 
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            let code = await sock.requestPairingCode(config.numero_bot); [cite: 31]
-            console.log(`\n🔑 CÓDIGO DE EMPAREJAMIENTO: ${code}\n`); [cite: 32]
-        }, 2000);
-    }
+    // Solicitar código de emparejamiento [cite: 30]
+    setTimeout(async () => {
+        const code = await sock.requestPairingCode(numeroBot);
+        console.log('\x1b[32m%s\x1b[0m', '🔑 CÓDIGO DE EMPAREJAMIENTO:');
+        console.log('\x1b[33m%s\x1b[0m', '=========================================');
+        console.log('\x1b[1;37m%s\x1b[0m', code);
+        console.log('\x1b[33m%s\x1b[0m', '=========================================');
+        console.log('\n📲 INSTRUCCIONES:');
+        console.log('1. Abre WhatsApp en el teléfono del BOT');
+        console.log('2. Ve a: Menú > Dispositivos vinculados > Vincular dispositivo'); [cite: 31]
+        console.log('3. Selecciona "Vincular con número de teléfono"');
+        console.log('4. Ingresa este código exactamente como aparece\n');
+    }, 1000);
 
-    sock.ev.on('creds.update', saveCreds); [cite: 33]
+    // Evento cuando se actualizan las credenciales [cite: 32]
+    sock.ev.on('creds.update', saveCreds);
+
+    // Evento cuando se conecta exitosamente [cite: 33]
     sock.ev.on('connection.update', (update) => {
-        if (update.connection === 'open') { [cite: 34]
-            console.log('✅ CONECTADO EXITOSAMENTE');
+        const { connection, lastDisconnect } = update;
+        if (connection === 'open') {
+            console.log('\x1b[32m%s\x1b[0m', '✅ ¡EMPAREJAMIENTO EXITOSO!');
+            console.log('El Bot ya está conectado y listo para usar.\n');
             process.exit(0);
-        } [cite: 35]
+        } else if (connection === 'close') {
+            console.log('\x1b[31m%s\x1b[0m', '❌ La conexión se cerró'); [cite: 34]
+            process.exit(1);
+        }
     });
-}
-emparejar(); [cite: 36]
-EOF
+} [cite: 35]
+
+emparejar().catch(err => {
+    console.error('\x1b[31m%s\x1b[0m', 'Error en emparejamiento:', err);
+    process.exit(1);
+});
+EOF [cite: 36]
+
+mensaje_ok "Script de emparejamiento creado"
 
 # =============================================
-# PASO 12: Script Principal
+# PASO 12: Crear script principal del bot
 # =============================================
+clear
+mensaje_titulo "PASO 12/12 - CREANDO SCRIPT PRINCIPAL"
+
+cd ~/comidabot
+
 cat > bot.js << 'EOF'
 import makeWASocket from '@whiskeysockets/baileys'; [cite: 37]
-import { useMultiFileAuthState } from '@whiskeysockets/baileys'; [cite: 38]
+import { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'fs';
-import sqlite3 from 'sqlite3'; [cite: 39]
-import { exec } from 'child_process'; [cite: 40]
+import sqlite3 from 'sqlite3';
+import { exec } from 'child_process'; [cite: 38]
+import { fileURLToPath } from 'url';
+import path from 'path';
 
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8')); [cite: 41]
-const db = new sqlite3.Database(config.db_path); [cite: 42]
+// Configuración [cite: 39]
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const db = new sqlite3.Database(config.db_path);
 
+// Función para delay aleatorio [cite: 40]
+const delay = (min, max) => new Promise(resolve => 
+    setTimeout(resolve, Math.floor(Math.random() * (max - min + 1) + min))
+);
+
+// Función para activar typing [cite: 41]
+const sendTyping = async (sock, jid, time) => {
+    await sock.sendPresenceUpdate('composing', jid);
+    await delay(time, time); [cite: 42]
+};
+
+// Procesar mensajes entrantes
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info'); [cite: 43]
-    const sock = makeWASocket({ auth: state, logger: pino({ level: 'silent' }) }); [cite: 44]
-    
-    sock.ev.on('creds.update', saveCreds); [cite: 45]
-    
-    sock.ev.on('messages.upsert', async ({ messages }) => { [cite: 46]
+    const sock = makeWASocket({
+        auth: state,
+        logger: pino({ level: 'silent' }),
+    });
+    sock.ev.on('creds.update', saveCreds); [cite: 44]
+
+    sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
-        if (!m.message || m.key.fromMe) return; [cite: 47]
+        if (!m.message) return;
         
         const from = m.key.remoteJid;
-        const text = m.message.conversation || m.message.extendedTextMessage?.text || ''; [cite: 48]
-        const isAudio = m.message.audioMessage ? true : false; [cite: 49]
+        const text = m.message.conversation || m.message.extendedTextMessage?.text || '';
+        const isAudio = m.message.audioMessage ? true : false;
         
-        db.get('SELECT * FROM autorizados WHERE numero = ?', [from.split('@')[0]], async (err, autorizado) => { [cite: 50]
-            if (autorizado && isAudio) {
-                await sock.sendMessage(from, { text: '🎤 Procesando audio del dueño...' });
+        console.log(`Mensaje de ${from}: ${text}`);
+   
+        // Verificar si es número autorizado (dueño) [cite: 45]
+        db.get('SELECT * FROM autorizados WHERE numero = ?', [from.split('@')[0]], async (err, autorizado) => {
+            if (err) console.error(err);
+            
+            if (isAudio && autorizado) {
+                // Procesar audio del dueño [cite: 46]
+                await sendTyping(sock, from, 5000);
+                await sock.sendMessage(from, { text: '🎤 Procesando tu audio...' });
+                
+                // Aquí se integrará Whisper para transcribir
+                // Por ahora solo un placeholder [cite: 47]
+                await delay(3000, 5000);
+                await sock.sendMessage(from, { text: 'Audio procesado (placeholder)' }); [cite: 48]
+                
             } else if (!isAudio) {
-                await sock.sendMessage(from, { text: '🤖 Bot funcionando correctamente' });
-            }
+                // Responder a clientes
+                await sendTyping(sock, from, config.typing_min * 1000);
+                await delay(config.delay_min * 1000, config.delay_max * 1000); [cite: 49]
+                
+                // Respuesta de prueba
+                await sock.sendMessage(from, { text: '🤖 Bot funcionando correctamente\nPronto implementaremos las respuestas reales' });
+            } [cite: 50]
         });
     });
-    console.log('🤖 Bot en línea...');
-}
-startBot(); [cite: 51]
-EOF
 
-mensaje_ok "Instalación completada satisfactoriamente."
+    console.log('🤖 Bot iniciado y escuchando mensajes...');
+}
+
+startBot().catch(err => console.error('Error:', err));
+EOF [cite: 51]
+
+verificar_paso "Script principal creado" "Error al crear bot.js" "Paso 12 - Script principal"
+
+# =============================================
+# CREAR ARCHIVO README
+# =============================================
+cat > README.md << 'EOF'
+# COMIDABOT - Bot de WhatsApp para Comidas Corridas
+
+## Instalación (un solo comando)
+```bash
+curl -sSL [https://raw.githubusercontent.com/TU_USUARIO/comidabot/main/install.sh](https://raw.githubusercontent.com/TU_USUARIO/comidabot/main/install.sh) | bash [cite: 52]
