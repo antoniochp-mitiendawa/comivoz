@@ -56,11 +56,6 @@ esperar_usuario() {
     read
 }
 
-# Función para limpiar el buffer de entrada (solo para el Paso 10)
-limpiar_buffer() {
-    while read -r -t 0; do read -r; done
-}
-
 # =============================================
 # INICIO DE LA INSTALACIÓN
 # =============================================
@@ -126,12 +121,21 @@ mensaje_titulo "PASO 3/12 - CREANDO DIRECTORIO DEL PROYECTO"
 
 cd ~
 if [ -d "comidabot" ]; then
-    mensaje_advertencia "El directorio comidabot ya existe. Continuando con la instalación..."
-else
-    mkdir -p ~/comidabot
-    mensaje_ok "Directorio creado en ~/comidabot"
+    mensaje_advertencia "El directorio comidabot ya existe. ¿Deseas eliminarlo? (s/n)"
+    read -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Ss]$ ]]; then
+        rm -rf comidabot
+        mensaje "Directorio eliminado"
+    else
+        mensaje_error "No se puede continuar con un directorio existente"
+        exit 1
+    fi
 fi
+
+mkdir -p ~/comidabot
 cd ~/comidabot
+verificar_paso "Directorio creado en ~/comidabot" "Error al crear directorio" "Paso 3 - Directorio"
 
 # =============================================
 # PASO 4: Instalar Whisper.cpp
@@ -369,41 +373,33 @@ EOF
 mensaje_ok "Archivo config.json creado"
 
 # =============================================
-# PASO 10: Solicitar números (CORREGIDO)
+# PASO 10: Solicitar números y emparejamiento
 # =============================================
 clear
 mensaje_titulo "PASO 10/12 - CONFIGURACIÓN DE NÚMEROS"
-
-# Limpiar buffer antes de leer
-limpiar_buffer
 
 echo ""
 echo -e "${BLANCO}Ingresa el número del BOT (el que atenderá clientes)${NC}"
 echo -e "Formato: 5215512345678 (código de país + número sin espacios)"
 echo -e "${AMARILLO}Ejemplo: 5215551234567${NC}"
 echo -n "> "
-
-# Leer con validación
 read NUMERO_BOT
 
-while [ -z "$NUMERO_BOT" ]; do
-    mensaje_advertencia "El número no puede estar vacío. Intenta de nuevo:"
-    echo -n "> "
-    read NUMERO_BOT
-done
+if [ -z "$NUMERO_BOT" ]; then
+    mensaje_error "El número del bot es obligatorio"
+    exit 1
+fi
 
 echo ""
 echo -e "${BLANCO}Ingresa el número del DUEÑO (el que dará instrucciones)${NC}"
 echo -e "Formato: 5215512345678"
 echo -n "> "
-
 read NUMERO_DUENO
 
-while [ -z "$NUMERO_DUENO" ]; do
-    mensaje_advertencia "El número no puede estar vacío. Intenta de nuevo:"
-    echo -n "> "
-    read NUMERO_DUENO
-done
+if [ -z "$NUMERO_DUENO" ]; then
+    mensaje_error "El número del dueño es obligatorio"
+    exit 1
+fi
 
 # Guardar números en config.json
 sed -i "s/\"numero_bot\": \"\"/\"numero_bot\": \"$NUMERO_BOT\"/" config.json
