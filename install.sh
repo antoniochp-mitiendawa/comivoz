@@ -5,6 +5,9 @@
 # Un solo comando, todo listo
 # ====================================
 
+# Convertir a formato Unix por si acaso
+sed -i 's/\r$//' "$0"
+
 clear
 echo "===================================="
 echo "  COMIVOZ - INSTALACIÓN AUTOMÁTICA"
@@ -18,7 +21,7 @@ pkg update -y && pkg upgrade -y
 
 # PASO 2: Instalar paquetes necesarios
 echo "[2/9] Instalando paquetes necesarios..."
-pkg install -y nodejs ffmpeg git sqlite wget curl
+pkg install -y nodejs-lts ffmpeg git sqlite wget curl unzip
 
 # PASO 3: Crear carpetas del proyecto
 echo "[3/9] Creando estructura de carpetas..."
@@ -27,12 +30,13 @@ cd comivoz
 mkdir -p database
 mkdir -p models
 mkdir -p logs
+mkdir -p auth_info
 
 # PASO 4: Descargar modelo Vosk (español - 40MB)
 echo "[4/9] Descargando modelo de voz Vosk español (40MB)..."
 cd models
-wget https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
-unzip vosk-model-small-es-0.42.zip
+wget -q --show-progress https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+unzip -q vosk-model-small-es-0.42.zip
 rm vosk-model-small-es-0.42.zip
 mv vosk-model-small-es-0.42 vosk-model
 cd ..
@@ -49,8 +53,7 @@ cat > package.json << 'EOF'
     "@whiskeysockets/baileys": "^6.5.0",
     "sqlite3": "^5.1.6",
     "vosk": "^0.3.45",
-    "fluent-ffmpeg": "^2.1.2",
-    "qrcode-terminal": "^0.12.0"
+    "fluent-ffmpeg": "^2.1.2"
   }
 }
 EOF
@@ -61,8 +64,8 @@ npm install
 echo "[6/9] Configuración inicial (solo una vez)"
 echo "----------------------------------------"
 echo ""
-read -p "📱 Número de la dueña (quien mandará audios, ej: 5512345678): " NUMERO_DUENA
-read -p "🤖 Número del bot (el que emparejaremos, ej: 5512345678): " NUMERO_BOT
+read -p "📱 Número de la dueña (10 dígitos, ej: 5512345678): " NUMERO_DUENA
+read -p "🤖 Número del bot (10 dígitos, ej: 5512345678): " NUMERO_BOT
 read -p "🏠 Nombre del negocio (ej: Lupita Comidas): " NOMBRE_NEGOCIO
 read -p "📍 Dirección (ej: Av. Principal #123): " DIRECCION
 read -p "🕒 Horario (ej: 8am a 5pm): " HORARIO
@@ -89,42 +92,42 @@ CREATE TABLE IF NOT EXISTS desayunos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombre TEXT NOT NULL,
   precio INTEGER NOT NULL,
-  disponible BOOLEAN DEFAULT 1,
+  disponible INTEGER DEFAULT 1,
   fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS primer_tiempo (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombre TEXT NOT NULL,
-  disponible BOOLEAN DEFAULT 1,
+  disponible INTEGER DEFAULT 1,
   fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS segundo_tiempo (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombre TEXT NOT NULL,
-  disponible BOOLEAN DEFAULT 1,
+  disponible INTEGER DEFAULT 1,
   fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS tercer_tiempo (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombre TEXT NOT NULL,
-  disponible BOOLEAN DEFAULT 1,
+  disponible INTEGER DEFAULT 1,
   fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS bebida (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombre TEXT NOT NULL,
-  disponible BOOLEAN DEFAULT 1,
+  disponible INTEGER DEFAULT 1,
   fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS postre (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombre TEXT NOT NULL,
-  disponible BOOLEAN DEFAULT 1,
+  disponible INTEGER DEFAULT 1,
   fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -136,7 +139,7 @@ CREATE TABLE IF NOT EXISTS precio_comida (
 
 CREATE TABLE IF NOT EXISTS domicilio_config (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  activo BOOLEAN DEFAULT 0,
+  activo INTEGER DEFAULT 0,
   telefono_reenvio TEXT,
   fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -147,38 +150,9 @@ CREATE TABLE IF NOT EXISTS solicitudes_domicilio (
   fecha_hora DATETIME DEFAULT CURRENT_TIMESTAMP,
   estado TEXT DEFAULT 'pendiente'
 );
-
-CREATE TABLE IF NOT EXISTS sinonimos (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  palabra TEXT NOT NULL,
-  categoria TEXT NOT NULL,
-  prioridad INTEGER DEFAULT 1
-);
-
-CREATE TABLE IF NOT EXISTS emojis_categoria (
-  categoria TEXT PRIMARY KEY,
-  emoji_principal TEXT NOT NULL,
-  emojis_secundarios TEXT
-);
-
-INSERT OR IGNORE INTO emojis_categoria (categoria, emoji_principal) VALUES
-('desayuno', '🍳'),
-('primer_tiempo', '🥣'),
-('segundo_tiempo', '🍚'),
-('tercer_tiempo', '🍖'),
-('bebida', '🥤'),
-('postre', '🍨'),
-('horario', '🕒'),
-('direccion', '📍'),
-('precio', '💰'),
-('domicilio', '🚚');
 EOF
 
 sqlite3 database/comivoz.db < database/schema.sql
-
-# PASO 9: Descargar bot.js desde GitHub
-echo "[9/9] Descargando bot principal..."
-curl -o bot.js https://raw.githubusercontent.com/TU-USUARIO/comivoz/main/bot.js
 
 echo ""
 echo "===================================="
@@ -196,23 +170,34 @@ echo ""
 echo "Presiona ENTER para generar el código de emparejamiento"
 read
 
+# PASO 9: Generar código de emparejamiento
 echo "Generando código de emparejamiento..."
 node -e "
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+
 async function main() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-  const sock = makeWASocket({ auth: state });
+  const sock = makeWASocket({ 
+    auth: state,
+    browser: ['ComiVoz', 'Safari', '1.0.0']
+  });
+  
   sock.ev.on('creds.update', saveCreds);
+  
   setTimeout(() => {
     console.log('\\n🔑 CÓDIGO DE EMPAREJAMIENTO:');
     console.log('====================================');
-    console.log(sock.authState.creds.registrationId);
+    console.log(state.creds.registrationId);
     console.log('====================================');
     console.log('\\nCopia este código y pégalo en WhatsApp');
     process.exit(0);
   }, 5000);
 }
-main();
+
+main().catch(err => {
+  console.error('Error:', err);
+  process.exit(1);
+});
 "
 
 echo ""
