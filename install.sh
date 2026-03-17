@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+# #!/data/data/com.termux/files/usr/bin/bash
 
 # =============================================
 # INSTALADOR DE COMIDABOT PARA TERMUX
@@ -120,13 +120,11 @@ clear
 mensaje_titulo "PASO 3/12 - CREANDO DIRECTORIO DEL PROYECTO"
 
 cd ~
-if [ -d "comidabot" ];
-then
+if [ -d "comidabot" ]; then
     mensaje_advertencia "El directorio comidabot ya existe. ¿Deseas eliminarlo? (s/n)"
     read -n 1 -r < /dev/tty
     echo ""
-    if [[ $REPLY =~ ^[Ss]$ ]];
-    then
+    if [[ $REPLY =~ ^[Ss]$ ]]; then
         rm -rf comidabot
         mensaje "Directorio eliminado"
         mkdir -p ~/comidabot
@@ -146,7 +144,6 @@ verificar_paso "Directorio listo" "Error al acceder al directorio" "Paso 3 - Dir
 clear
 mensaje_titulo "PASO 4/12 - INSTALANDO WHISPER.CPP (RECONOCIMIENTO DE VOZ)"
 
-# Solución técnica estándar: Verificar existencia antes de clonar
 if [ -d "whisper.cpp" ]; then
     mensaje "El repositorio de Whisper.cpp ya existe, accediendo..."
     cd whisper.cpp
@@ -157,9 +154,8 @@ else
     cd whisper.cpp
 fi
 
-mensaje "Compilando Whisper.cpp (esto puede tomar varios minutos)..."
-# Solo compila si no existe el binario principal
 if [ ! -f "main" ]; then
+    mensaje "Compilando Whisper.cpp (esto puede tomar varios minutos)..."
     make -j4
     verificar_paso "Compilación completada" "Error al compilar Whisper.cpp" "Paso 4 - Compilación"
 else
@@ -186,7 +182,9 @@ mensaje_titulo "PASO 5/12 - INICIALIZANDO PROYECTO NODE.JS"
 cd ~/comidabot
 if [ ! -f "package.json" ]; then
     npm init -y
-    cat > package.json << 'EOF'
+fi
+
+cat > package.json << 'EOF'
 {
   "name": "comidabot",
   "version": "1.0.0",
@@ -202,7 +200,7 @@ if [ ! -f "package.json" ]; then
   "license": "ISC"
 }
 EOF
-fi
+
 verificar_paso "package.json configurado" "Error al configurar package.json" "Paso 5 - npm init"
 
 # =============================================
@@ -212,7 +210,6 @@ clear
 mensaje_titulo "PASO 6/12 - INSTALANDO DEPENDENCIAS NODE.JS"
 
 mensaje "Instalando paquetes npm (esto puede tomar varios minutos)..."
-# npm install es inteligente y no reinstala lo que ya existe
 npm install @whiskeysockets/baileys pino sqlite3 node-fetch fluent-ffmpeg qrcode-terminal audio-decode
 verificar_paso "Dependencias npm instaladas" "Error al instalar dependencias npm" "Paso 6 - npm install"
 
@@ -365,29 +362,28 @@ mensaje_ok "Archivo config.json creado"
 clear
 mensaje_titulo "PASO 10/12 - CONFIGURACIÓN DE NÚMEROS"
 
-# Implementación de bucle infinito hasta recibir datos (Estándar de terminal física)
+# Bucle basado en el proyecto de referencia para asegurar detención
 NUMERO_BOT=""
-while [ -z "$NUMERO_BOT" ]; do
+while [[ -z "$NUMERO_BOT" ]]; do
     echo ""
     echo -e "${BLANCO}Ingresa el número del BOT (el que atenderá clientes)${NC}"
     echo -e "Formato: 5215512345678 (código de país + número sin espacios)"
     echo -e "${AMARILLO}Ejemplo: 5215551234567${NC}"
     echo -n "> "
-    # Forzar lectura directa de la terminal física
-    read NUMERO_BOT < /dev/tty
-    if [ -z "$NUMERO_BOT" ]; then
+    read NUMERO_BOT
+    if [[ -z "$NUMERO_BOT" ]]; then
         mensaje_error "El número del bot es obligatorio"
     fi
 done
 
 NUMERO_DUENO=""
-while [ -z "$NUMERO_DUENO" ]; do
+while [[ -z "$NUMERO_DUENO" ]]; do
     echo ""
     echo -e "${BLANCO}Ingresa el número del DUEÑO (el que dará instrucciones)${NC}"
     echo -e "Formato: 5215512345678"
     echo -n "> "
-    read NUMERO_DUENO < /dev/tty
-    if [ -z "$NUMERO_DUENO" ]; then
+    read NUMERO_DUENO
+    if [[ -z "$NUMERO_DUENO" ]]; then
         mensaje_error "El número del dueño es obligatorio"
     fi
 done
@@ -510,8 +506,6 @@ verificar_paso "Script principal creado" "Error al crear bot.js" "Paso 12"
 # =============================================
 # FINALIZACIÓN
 # =============================================
-mensaje_ok "¡Instalación completada exitosamente!"
+mensaje_ok "Instalación completada exitosamente."
 echo ""
-echo -e "${AMARILLO}Para iniciar el emparejamiento con WhatsApp, ejecuta:${NC}"
-echo -e "${BLANCO}cd ~/comidabot && node emparejar.js${NC}"
-echo ""
+echo -e "${AMARILLO}Ejecuta: node emparejar.js para vincular WhatsApp${NC}"
