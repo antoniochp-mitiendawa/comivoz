@@ -7,28 +7,28 @@
 
 echo -e "\n\e[1;32m[+] Iniciando CONFIGURACIÓN DEL MOTOR (Bloque 1)...\e[0m"
 
-# Evitar interrupciones manuales
-export DEBIAN_FRONTEND=noninteractive
+# Asegurar que estamos en el directorio HOME de Termux
+cd $HOME
 
-echo -e "\e[1;34m[+] Instalando Node.js LTS y dependencias de red...\e[0m"
-# Instalamos Node.js (el motor) y aseguramos que las herramientas de compilación estén presentes
+# Instalación de Node.js (Motor principal)
+echo -e "\e[1;34m[+] Instalando Node.js LTS...\e[0m"
 pkg install nodejs-lts -y -o Dpkg::Options::="--force-confold"
 
-echo -e "\e[1;34m[+] Creando estructura de directorios en el Home...\e[0m"
-# Creamos la carpeta del bot y entramos en ella
-mkdir -p $HOME/comidabot
-cd $HOME/comidabot
+# Creación de la carpeta del proyecto
+echo -e "\e[1;34m[+] Creando directorio oficial 'comidabot'...\e[0m"
+mkdir -p comidabot
+cd comidabot
 
-echo -e "\e[1;34m[+] Inicializando entorno de Node (Package Manager)...\e[0m"
-# Creamos el archivo package.json base de forma automática
+# Inicialización del proyecto Node
+echo -e "\e[1;34m[+] Configurando archivos de dependencias...\e[0m"
 npm init -y
 
-echo -e "\e[1;34m[+] Instalando Baileys y librerías de conexión de WhatsApp...\e[0m"
-# Instalamos la librería de conexión (Baileys), el gestor de logs (Pino) y el generador de QR
+# Instalación de Baileys y herramientas de conexión
+echo -e "\e[1;34m[+] Descargando librerías de WhatsApp (Baileys)...\e[0m"
 npm install @whiskeysockets/baileys pino qrcode-terminal --no-audit --no-fund
 
 echo -e "\n\e[1;32m------------------------------------------\e[0m"
 echo -e "\e[1;32m BLOQUE 1: MOTOR Y LIBRERÍAS INSTALADOS\e[0m"
-echo -e "\e[1;32m Estado: LISTO PARA EMPAREJAMIENTO\e[0m"
+echo -e "\e[1;32m El entorno de ejecución está LISTO.\e[0m"
 echo -e "\e[1;32m------------------------------------------\e[0m"
-echo -e "\e[1;33mPróximo paso: Bloque 2 (Script de Pairing Code).\e[0m\n"
+echo -e "\e[1;33mSiguiente fase: Bloque 2 (Pairing Code).\e[0m\n"
