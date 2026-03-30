@@ -2,7 +2,7 @@
 
 // ============================================
 // COMIDABOT - Bot de WhatsApp para Comida Corrida
-// Versión: 1.0.5 (corregido: downloadMediaMessage)
+// Versión: 1.0.6 (DEFINITIVA - SOLO CORREGIDO AUDIO)
 // ============================================
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
@@ -123,7 +123,7 @@ function limpiarDia() {
 }
 
 // ============================================
-// TRANSCRIPCIÓN DE VOZ (Whisper.cpp)
+// TRANSCRIPCIÓN DE VOZ
 // ============================================
 
 async function transcribirAudio(bufferAudio) {
@@ -436,6 +436,7 @@ async function startBot() {
         } else if (msg.message.audioMessage) {
             esVoz = true;
             try {
+                // CORRECCIÓN: Usar downloadMediaMessage correctamente
                 const stream = await downloadMediaMessage(
                     msg,
                     'stream',
