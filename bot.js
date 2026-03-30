@@ -2,10 +2,10 @@
 
 // ============================================
 // COMIDABOT - Bot de WhatsApp para Comida Corrida
-// Versión: 1.0.2 (con wake lock y pairing code corregido)
+// Versión: 1.0.3 (con pairing code corregido)
 // ============================================
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const P = require('pino');
 const fs = require('fs');
@@ -14,6 +14,10 @@ const Database = require('yskj-sqlite-android');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const readline = require('readline');
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const question = (text) => new Promise((resolve) => rl.question(text, resolve));
 
 // ============================================
 // CONFIGURACIÓN INICIAL
@@ -380,76 +384,37 @@ async function startBot() {
         auth: state,
         printQRInTerminal: false,
         logger: P({ level: 'silent' }),
-        browser: ['Windows', 'Chrome', '114.0.5735.198'],
-        defaultQueryTimeoutMs: undefined,
-        keepAliveIntervalMs: 30000
+        browser: ['Windows', 'Chrome', '114.0.5735.198']
     });
     
     sock.ev.on('creds.update', saveCreds);
-    
-    let pairingRequested = false;
     
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) startBot();
+            if (shouldReconnect) {
+                console.log("🔄 Reconectando...");
+                startBot();
+            }
         } else if (connection === 'open') {
             console.log("✅ Bot conectado exitosamente");
-            
-            // CORRECCIÓN: Esperar a que la conexión esté abierta para pedir pairing code
-            if (!state.creds.registered && !pairingRequested) {
-                pairingRequested = true;
-                
-                // Delay de 2 segundos para asegurar estabilidad
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                const readline = require('readline');
-                const rl = readline.createInterface({
-                    input: process.stdin,
-                    output: process.stdout
-                });
-                
-                rl.question("📱 Ingresa el número del BOT que quieres vincular (ej. 5215551234567): ", async (numero) => {
-                    console.log("📟 Solicitando código de emparejamiento...");
-                    try {
-                        const code = await sock.requestPairingCode(numero);
-                        console.log(`🔑 Código de emparejamiento: ${code}`);
-                        console.log("📲 Abre WhatsApp, ve a Dispositivos vinculados y escribe este código.");
-                        console.log("⏳ Esperando vinculación...");
-                    } catch (error) {
-                        console.error("❌ Error al solicitar código:", error.message);
-                        console.log("🔄 Reintentando en 5 segundos...");
-                        setTimeout(() => {
-                            pairingRequested = false;
-                        }, 5000);
-                    }
-                    rl.close();
-                });
-            }
             
             // Configuración del dueño si no existe
             if (!adminID) {
                 console.log("\n==========================================");
-                console.log("⚙️ CONFIGURACIÓN INICIAL");
+                console.log("⚙️ CONFIGURACIÓN INICIAL - DUEÑO");
                 console.log("==========================================");
                 
-                const readline = require('readline');
-                const rl = readline.createInterface({
-                    input: process.stdin,
-                    output: process.stdout
-                });
-                
-                rl.question("📱 Ingresa el número del DUEÑO (admin): ", async (numero) => {
-                    const numeroCompleto = `${numero}@s.whatsapp.net`;
-                    await sock.sendMessage(numeroCompleto, { text: "🔐 Responde para confirmar que eres el administrador" });
-                    console.log("⏳ Esperando respuesta...");
-                    rl.close();
-                });
+                const numero = await question("📱 Ingresa el número del DUEÑO (admin): ");
+                const numeroCompleto = `${numero}@s.whatsapp.net`;
+                await sock.sendMessage(numeroCompleto, { text: "🔐 Responde para confirmar que eres el administrador" });
+                console.log("⏳ Esperando respuesta...");
             } else {
                 console.log(`👑 Dueño: ${adminID}`);
-                console.log("🎧 Esperando instrucciones...");
+                console.log("🎧 Esperando instrucciones por voz...");
+                console.log("💬 Esperando preguntas de clientes...");
             }
         }
     });
@@ -492,6 +457,23 @@ async function startBot() {
         
         await procesarMensaje(sock, msg, sender, messageText, esVoz);
     });
+    
+    // ============================================
+    // PAIRING CODE - FUERA DEL EVENTO connection.update
+    // (siguiendo el patrón del proyecto funcional)
+    // ============================================
+    
+    if (!sock.authState.creds.registered) {
+        console.log("\n==========================================");
+        console.log("🔐 VINCULACIÓN DEL BOT");
+        console.log("==========================================");
+        await delay(5000);
+        const numero = await question("📱 Ingresa el número del BOT que quieres vincular (ej. 5215551234567): ");
+        const codigo = await sock.requestPairingCode(numero.trim());
+        console.log(`\n🔑 CÓDIGO DE EMPAREJAMIENTO: ${codigo}`);
+        console.log("📲 Abre WhatsApp, ve a Dispositivos vinculados y escribe este código.\n");
+        console.log("⏳ Esperando vinculación...");
+    }
 }
 
 startBot().catch(err => console.error("❌ Error fatal:", err));
