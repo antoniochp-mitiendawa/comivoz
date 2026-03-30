@@ -134,17 +134,14 @@ async function transcribirAudio(bufferAudio) {
     if (!fs.existsSync(TEMP_AUDIO_DIR)) fs.mkdirSync(TEMP_AUDIO_DIR);
     fs.writeFileSync(tempOpus, bufferAudio);
     
-    // Convertir de opus a wav
     await execAsync(`ffmpeg -i ${tempOpus} -ar 16000 -ac 1 -c:a pcm_s16le ${tempWav} -y`);
     
     try {
-        // Ejecutar whisper-cli con ruta completa
         await execAsync(`${WHISPER_CLI} -m ${WHISPER_MODEL} -f ${tempWav} -otxt -l es`);
         let texto = '';
         if (fs.existsSync(tempTxt)) {
             texto = fs.readFileSync(tempTxt, 'utf8').trim();
         }
-        // Limpiar archivos temporales
         if (fs.existsSync(tempOpus)) fs.unlinkSync(tempOpus);
         if (fs.existsSync(tempWav)) fs.unlinkSync(tempWav);
         if (fs.existsSync(tempTxt)) fs.unlinkSync(tempTxt);
@@ -438,8 +435,6 @@ async function startBot() {
             messageText = msg.message.extendedTextMessage.text;
         } else if (msg.message.audioMessage) {
             esVoz = true;
-            
-            // CORRECCIÓN: Usar downloadMediaMessage según documentación oficial
             try {
                 const stream = await downloadMediaMessage(
                     msg,
