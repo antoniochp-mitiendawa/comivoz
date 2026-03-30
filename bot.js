@@ -2,10 +2,10 @@
 
 // ============================================
 // COMIDABOT - Bot de WhatsApp para Comida Corrida
-// Versión: 1.0.4 (corregido: descarga de audio y whisper)
+// Versión: 1.0.5 (corregido: downloadMediaMessage)
 // ============================================
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const P = require('pino');
 const fs = require('fs');
@@ -123,7 +123,7 @@ function limpiarDia() {
 }
 
 // ============================================
-// TRANSCRIPCIÓN DE VOZ (CORREGIDO)
+// TRANSCRIPCIÓN DE VOZ (Whisper.cpp)
 // ============================================
 
 async function transcribirAudio(bufferAudio) {
@@ -438,10 +438,33 @@ async function startBot() {
             messageText = msg.message.extendedTextMessage.text;
         } else if (msg.message.audioMessage) {
             esVoz = true;
-            // CORRECCIÓN: descargar audio correctamente
-            const buffer = await sock.downloadMediaMessage(msg.message.audioMessage);
-            messageText = await transcribirAudio(buffer);
-            console.log(`🎤 Transcripción: ${messageText}`);
+            
+            // CORRECCIÓN: Usar downloadMediaMessage según documentación oficial
+            try {
+                const stream = await downloadMediaMessage(
+                    msg,
+                    'stream',
+                    {},
+                    { reuploadRequest: sock.updateMediaMessage }
+                );
+                
+                const chunks = [];
+                for await (const chunk of stream) {
+                    chunks.push(chunk);
+                }
+                const buffer = Buffer.concat(chunks);
+                
+                if (!buffer || buffer.length === 0) {
+                    console.log("⚠️ Buffer de audio vacío");
+                    return;
+                }
+                
+                messageText = await transcribirAudio(buffer);
+                console.log(`🎤 Transcripción: ${messageText}`);
+            } catch (error) {
+                console.error("❌ Error descargando audio:", error.message);
+                return;
+            }
         } else {
             return;
         }
