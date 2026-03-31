@@ -1,1 +1,32 @@
+# =========================================================
+# CONFIGURACIÓN DEL BOT - PROYECTO: COMIDABOT
+# =========================================================
 
+# Ajustes del Servidor de IA (Local y Gratis)
+ai_provider: "ollama"
+ollama:
+  base_url: "http://localhost:11434"
+  model: "llama3.2:1b"
+  temperature: 0.7
+
+# Configuración de WhatsApp
+whatsapp:
+  session_name: "comidabot_session"
+  pairing_mode: true       # Activa el código de 8 dígitos
+  browser_name: "ComidaBot Terminal"
+  sync_full_history: false  # Para que no tarde horas cargando mensajes viejos
+
+# Lógica de Negocio y Memoria
+bot_settings:
+  memory_path: "./database/memory.sqlite"
+  language: "es"
+  auto_read: true          # Marca como leído al procesar
+  respond_to_groups: false  # Solo chat individual para evitar spam
+
+# Instrucción Maestra (System Prompt)
+# Esto define que el bot aprenda de lo que el dueño le diga
+system_instruction: |
+  Eres un asistente de negocios inteligente y amable. 
+  Tu conocimiento base es nulo hasta que el dueño del número autorizado te proporcione datos.
+  Si un cliente pregunta algo que no sabes, responde que consultarás con el encargado.
+  Prioriza siempre la información guardada en tu memoria local sobre horarios, precios y productos.
