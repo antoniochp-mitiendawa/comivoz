@@ -1,22 +1,18 @@
 {
   "name": "comidabot",
   "version": "1.0.0",
-  "description": "Bot de WhatsApp con IA local y memoria persistente para negocios",
+  "description": "Bot de WhatsApp con IA local",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "install-deps": "npm install"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.6.0",
-    "qrcode-terminal": "^0.12.0",
-    "pino": "^8.19.0",
+    "@whiskeysockets/baileys": "6.6.0",
     "ollama": "^0.5.0",
+    "pino": "^8.19.0",
+    "dotenv": "^16.4.5",
     "js-yaml": "^4.1.0",
-    "sqlite3": "^5.1.7",
-    "dotenv": "^16.4.5"
-  },
-  "author": "ComidaBot Team",
-  "license": "ISC"
+    "@hapi/boom": "^10.0.1"
+  }
 }
